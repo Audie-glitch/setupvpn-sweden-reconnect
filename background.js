@@ -25,98 +25,126 @@ const DEFAULTS = {
 };
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  const current = await chrome.storage.local.get(null);
-  await chrome.storage.local.set({ ...DEFAULTS, ...current, lastAt: Date.now() });
-  chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
-  if (details.reason === "install" || details.reason === "update") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  try {
+    const current = await chrome.storage.local.get(null);
+    await chrome.storage.local.set({ ...DEFAULTS, ...current, lastAt: Date.now() });
+    chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
+    if (details.reason === "install") {
+      chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+      await startInstallAndConnectFlow(true);
+    } else if (details.reason === "update") {
+      // Don't force-open store/welcome on every reload during development.
+      await refreshSetupVpnState();
+    }
+  } catch (err) {
+    console.error("onInstalled failed", err);
   }
-  // Full flow: if SetupVPN missing, open store (content script clicks Add to Chrome).
-  // Chrome's confirm dialog still needs one user click ("Add extension").
-  await startInstallAndConnectFlow(details.reason === "install");
 });
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
-  startInstallAndConnectFlow(false);
+  refreshSetupVpnState().catch((err) => console.error(err));
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM) return;
-  const state = await refreshSetupVpnState();
-  const cfg = await chrome.storage.local.get({
-    enabled: true,
-    autoOpenDashboard: true,
-    pendingConnect: false,
-  autoAgreeGuest: true,
-  });
-  if (!cfg.enabled) return;
+  try {
+    const state = await refreshSetupVpnState();
+    const cfg = await chrome.storage.local.get({
+      enabled: true,
+      autoOpenDashboard: true,
+      pendingConnect: false,
+    });
+    if (!cfg.enabled) return;
 
-  if (!state.setupvpnInstalled || !state.setupvpnEnabled) {
-    await maybeOpenStore(false);
-    return;
-  }
+    if (!state.setupvpnInstalled || !state.setupvpnEnabled) {
+      await maybeOpenStore(false);
+      return;
+    }
 
-  if (cfg.pendingConnect || cfg.autoOpenDashboard) {
-    await openDashboardAndConnect(cfg.pendingConnect);
+    if (cfg.pendingConnect) {
+      await openDashboardAndConnect(true);
+      return;
+    }
+
+    if (cfg.autoOpenDashboard) {
+      const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
+      if (tabs.length === 0) {
+        await chrome.tabs.create({ url: DASHBOARD, active: false });
+        await setStatus("opened dashboard");
+      }
+    }
+  } catch (err) {
+    console.error("alarm failed", err);
   }
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type === "status") {
-    setStatus(msg.status).then(() => sendResponse({ ok: true }));
+  if (!msg || !msg.type) return;
+
+  if (msg.type === "status") {
+    setStatus(msg.status)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
   }
-  if (msg?.type === "checkSetupVpn") {
-    startInstallAndConnectFlow(!!msg.forcePrompt).then((state) => sendResponse(state));
+  if (msg.type === "checkSetupVpn") {
+    startInstallAndConnectFlow(!!msg.forcePrompt)
+      .then((state) => sendResponse(state))
+      .catch((err) => sendResponse({ error: String(err) }));
     return true;
   }
-  if (msg?.type === "startFullFlow") {
-    startInstallAndConnectFlow(true).then((state) => sendResponse(state));
+  if (msg.type === "startFullFlow") {
+    startInstallAndConnectFlow(true)
+      .then((state) => sendResponse(state))
+      .catch((err) => sendResponse({ error: String(err) }));
     return true;
   }
 });
 
-chrome.management.onInstalled.addListener(async (info) => {
-  if (info.id !== SETUPVPN_ID) return;
-  await setStatus("SetupVPN installed — connecting");
-  await chrome.storage.local.set({
-    setupvpnInstalled: true,
-    setupvpnEnabled: true,
-    pendingConnect: true,
+function watchManagement() {
+  if (!chrome.management) return;
+  chrome.management.onInstalled.addListener(async (info) => {
+    if (!info || info.id !== SETUPVPN_ID) return;
+    await setStatus("SetupVPN installed — connecting");
+    await chrome.storage.local.set({
+      setupvpnInstalled: true,
+      setupvpnEnabled: true,
+      pendingConnect: true,
+    });
+    await openDashboardAndConnect(true);
   });
-  await openDashboardAndConnect(true);
-});
-
-chrome.management.onUninstalled.addListener(async (id) => {
-  if (id !== SETUPVPN_ID) return;
-  await chrome.storage.local.set({
-    setupvpnInstalled: false,
-    setupvpnEnabled: false,
-    pendingConnect: false,
-  autoAgreeGuest: true,
+  chrome.management.onUninstalled.addListener(async (id) => {
+    if (id !== SETUPVPN_ID) return;
+    await chrome.storage.local.set({
+      setupvpnInstalled: false,
+      setupvpnEnabled: false,
+      pendingConnect: false,
+    });
+    await startInstallAndConnectFlow(true);
   });
-  await startInstallAndConnectFlow(true);
-});
-
-chrome.management.onEnabled.addListener(async (info) => {
-  if (info.id !== SETUPVPN_ID) return;
-  await chrome.storage.local.set({
-    setupvpnInstalled: true,
-    setupvpnEnabled: true,
-    pendingConnect: true,
+  chrome.management.onEnabled.addListener(async (info) => {
+    if (!info || info.id !== SETUPVPN_ID) return;
+    await chrome.storage.local.set({
+      setupvpnInstalled: true,
+      setupvpnEnabled: true,
+      pendingConnect: true,
+    });
+    await openDashboardAndConnect(true);
   });
-  await openDashboardAndConnect(true);
-});
-
-chrome.management.onDisabled.addListener(async (info) => {
-  if (info.id !== SETUPVPN_ID) return;
-  await chrome.storage.local.set({ setupvpnEnabled: false });
-  await setStatus("SetupVPN disabled — enable it");
-});
+  chrome.management.onDisabled.addListener(async (info) => {
+    if (!info || info.id !== SETUPVPN_ID) return;
+    await chrome.storage.local.set({ setupvpnEnabled: false });
+    await setStatus("SetupVPN disabled — enable it");
+  });
+}
+watchManagement();
 
 async function getSetupVpnState() {
   try {
+    if (!chrome.management || !chrome.management.get) {
+      return { setupvpnInstalled: false, setupvpnEnabled: false };
+    }
     const ext = await chrome.management.get(SETUPVPN_ID);
     return { setupvpnInstalled: true, setupvpnEnabled: !!ext.enabled };
   } catch (_err) {
@@ -148,25 +176,21 @@ async function maybeOpenStore(forcePrompt) {
   const due = forcePrompt || Date.now() - lastInstallPromptAt > 6 * 60 * 60 * 1000;
   if (!due) return;
 
-  // Prefer the Web Store detail page so our content script can click Add to Chrome.
   const existing = await chrome.tabs.query({
-    url: ["https://chromewebstore.google.com/*", "https://chrome.google.com/webstore/*"],
+    url: [
+      "https://chromewebstore.google.com/*",
+      "https://chrome.google.com/webstore/*",
+    ],
   });
-  let tab;
   if (existing.length) {
-    tab = existing.find((t) => (t.url || "").includes(SETUPVPN_ID)) || existing[0];
+    const tab =
+      existing.find((t) => (t.url || "").includes(SETUPVPN_ID)) || existing[0];
     await chrome.tabs.update(tab.id, { url: STORE, active: true });
   } else {
-    tab = await chrome.tabs.create({ url: STORE, active: true });
+    await chrome.tabs.create({ url: STORE, active: true });
   }
   await chrome.storage.local.set({ lastInstallPromptAt: Date.now() });
   await setStatus("SetupVPN missing — open Web Store, then click Add extension");
-  // Also keep our guided page available
-  const guide = chrome.runtime.getURL("install-setupvpn.html");
-  const guides = await chrome.tabs.query({ url: guide });
-  if (!guides.length) {
-    await chrome.tabs.create({ url: guide, active: false });
-  }
 }
 
 async function openDashboardAndConnect(markPending) {
@@ -177,10 +201,17 @@ async function openDashboardAndConnect(markPending) {
   if (tabs.length === 0) {
     await chrome.tabs.create({ url: DASHBOARD, active: true });
     await setStatus("opened dashboard — connecting");
-  } else {
-    await chrome.tabs.update(tabs[0].id, { url: DASHBOARD, active: true });
-    await setStatus("dashboard focused — connecting");
+    return;
   }
+  // Don't force-navigate away from /ui/guest while agreements are showing.
+  const active = tabs[0];
+  const url = active.url || "";
+  if (!/\/ui\/guest/i.test(url) && !/\/ui\/dashboard/i.test(url)) {
+    await chrome.tabs.update(active.id, { url: DASHBOARD, active: true });
+  } else {
+    await chrome.tabs.update(active.id, { active: true });
+  }
+  await setStatus("dashboard focused — connecting");
 }
 
 async function setStatus(status) {

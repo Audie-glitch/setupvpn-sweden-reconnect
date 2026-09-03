@@ -30,6 +30,16 @@
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
+  function safeSend(status) {
+    try {
+      chrome.runtime.sendMessage({ type: "status", status }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch (_err) {
+      // extension reloaded mid-page
+    }
+  }
+
 
   function labelText(el) {
     return (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
@@ -43,9 +53,11 @@
       const input =
         node.querySelector('input[type="checkbox"]') ||
         (node.htmlFor && document.getElementById(node.htmlFor)) ||
-        node.closest("label")?.querySelector('input[type="checkbox"]');
+        (node.closest("label") && node.closest("label").querySelector('input[type="checkbox"]'));
       if (input) return input;
-      const prior = node.previousElementSibling?.querySelector?.('input[type="checkbox"]');
+      const prior = node.previousElementSibling && node.previousElementSibling.querySelector
+        ? node.previousElementSibling.querySelector('input[type="checkbox"]')
+        : null;
       if (prior) return prior;
       const parentBox = node.closest(".ant-checkbox-wrapper, label");
       const nested = parentBox && parentBox.querySelector('input[type="checkbox"]');
@@ -113,18 +125,12 @@
       if (now - lastClick > 1500) {
         if (clickContinue()) {
           lastClick = now;
-          chrome.runtime.sendMessage({
-            type: "status",
-            status: "accepted guest terms + 18+ — continuing",
-          });
+          safeSend("accepted guest terms + 18+ — continuing",);
           return true;
         }
       }
       if (changed) {
-        chrome.runtime.sendMessage({
-          type: "status",
-          status: "checked guest agreements",
-        });
+        safeSend("checked guest agreements",);
       }
       return true; // still on guest gate
     }
@@ -254,7 +260,7 @@
     if (settings.stopOnUpgrade && isUpgrade()) {
       watching = false;
       await saveTimeRemaining(null);
-      chrome.runtime.sendMessage({ type: "status", status: "upgrade wall — stopped" });
+      safeSend("upgrade wall — stopped");
       return;
     }
 
@@ -286,7 +292,22 @@
     timer = setInterval(tick, ms);
   }
 
-  chrome.storage.onChanged.addListener(async () => {
+  const CONFIG_KEYS = new Set([
+    "enabled",
+    "country",
+    "checkSeconds",
+    "cooldownSeconds",
+    "stopOnUpgrade",
+    "rememberLastLocation",
+    "lastConnectedCountry",
+    "pendingConnect",
+    "autoAgreeGuest",
+  ]);
+
+  chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area && area !== "local") return;
+    const touched = Object.keys(changes || {});
+    if (!touched.some((k) => CONFIG_KEYS.has(k))) return;
     watching = true;
     await loadSettings();
     restartTimer();

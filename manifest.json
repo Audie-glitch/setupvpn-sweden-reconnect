@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "On install: open SetupVPN Web Store, help Add to Chrome, then auto-connect after you confirm.",
   "permissions": [
     "storage",
@@ -10,7 +10,9 @@
     "management"
   ],
   "host_permissions": [
-    "https://*.setupvpn.com/*"
+    "https://*.setupvpn.com/*",
+    "https://chromewebstore.google.com/*",
+    "https://chrome.google.com/webstore/*"
   ],
   "background": {
     "service_worker": "background.js"

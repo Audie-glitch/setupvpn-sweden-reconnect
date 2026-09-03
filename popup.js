@@ -24,6 +24,7 @@ const FIELDS = [
   "autoOpenDashboard",
   "stopOnUpgrade",
   "rememberLastLocation",
+  "autoAgreeGuest",
 ];
 
 function formatRemaining(endsAt) {
@@ -99,6 +100,7 @@ document.getElementById("pinHelp").addEventListener("click", (e) => {
 document.getElementById("installSetupvpn").addEventListener("click", (e) => {
   e.preventDefault();
   chrome.runtime.sendMessage({ type: "checkSetupVpn", forcePrompt: true }, (state) => {
+    void chrome.runtime.lastError;
     if (state && state.setupvpnInstalled && state.setupvpnEnabled) {
       chrome.tabs.create({ url: "https://user3.setupvpn.com/ui/dashboard" });
     } else {
@@ -109,5 +111,7 @@ document.getElementById("installSetupvpn").addEventListener("click", (e) => {
 
 document.getElementById("fullFlow").addEventListener("click", (e) => {
   e.preventDefault();
-  chrome.runtime.sendMessage({ type: "startFullFlow" });
+  chrome.runtime.sendMessage({ type: "startFullFlow" }, () => {
+    void chrome.runtime.lastError;
+  });
 });

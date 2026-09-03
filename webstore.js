@@ -24,10 +24,12 @@
     if (!btn) return;
     clicked = true;
     btn.click();
-    chrome.runtime.sendMessage({
-      type: "status",
-      status: "clicked Add to Chrome — confirm the Chrome dialog",
-    });
+    try {
+      chrome.runtime.sendMessage({
+        type: "status",
+        status: "clicked Add to Chrome — confirm the Chrome dialog",
+      }, () => { void chrome.runtime.lastError; });
+    } catch (_err) {}
   }
 
   const obs = new MutationObserver(tryClick);
