@@ -14,7 +14,8 @@ It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the 
 ## Popup settings
 
 - **Enabled** — turn the helper on/off
-- **Country** — Sweden, Germany, United States, Netherlands, United Kingdom, Poland
+- **Remember last connected location** — detect `Connected to X`, store it, reconnect there on drop
+- **Fallback country** — used only when nothing has been remembered yet
 - **Check every** — how often to look at the dashboard
 - **Click cooldown** — minimum time between clicks
 - **Auto-open dashboard** — open the UI tab if none is present

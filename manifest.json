@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.1.1",
-  "description": "When SetupVPN drops, re-click a chosen free country on the dashboard. Stops on upgrade walls.",
+  "version": "1.2.0",
+  "description": "When SetupVPN drops, remember the connected country and re-click it on the dashboard. Stops on upgrade walls.",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": ["https://*.setupvpn.com/*"],
   "background": {

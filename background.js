@@ -8,6 +8,8 @@ const DEFAULTS = {
   cooldownSeconds: 20,
   autoOpenDashboard: true,
   stopOnUpgrade: true,
+  rememberLastLocation: true,
+  lastConnectedCountry: "",
   lastStatus: "installed",
   lastAt: Date.now(),
 };

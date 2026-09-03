@@ -1,11 +1,14 @@
 (function () {
   const UPGRADE = /upgrade|need to upgrade|get premium|premium required|trial ended|buy premium/i;
+  const CONNECTED_TO = /connected to\s+([A-Za-z][A-Za-z .'-]{1,40})/i;
   const DEFAULTS = {
     enabled: true,
     country: "Sweden",
     checkSeconds: 4,
     cooldownSeconds: 20,
     stopOnUpgrade: true,
+    rememberLastLocation: true,
+    lastConnectedCountry: "",
   };
 
   let lastClick = 0;
@@ -18,22 +21,37 @@
   }
 
   function escapeRegExp(s) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   function isUpgrade() {
     return UPGRADE.test(bodyText());
   }
 
-  function isConnected() {
-    const country = settings.country || "Sweden";
-    const connectedTo = new RegExp(`connected to ${escapeRegExp(country)}`, "i");
+  function detectConnectedCountry() {
     const t = bodyText();
-    return connectedTo.test(t) || /you are successfully connected|time remaining/i.test(t);
+    const m = t.match(CONNECTED_TO);
+    if (!m) return null;
+    return m[1].replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
   }
 
-  function findCountry() {
-    const country = (settings.country || "Sweden").trim();
+  function isConnected() {
+    const t = bodyText();
+    return (
+      CONNECTED_TO.test(t) ||
+      /you are successfully connected/i.test(t) ||
+      /time remaining/i.test(t)
+    );
+  }
+
+  function targetCountry() {
+    if (settings.rememberLastLocation && settings.lastConnectedCountry) {
+      return settings.lastConnectedCountry;
+    }
+    return (settings.country || "Sweden").trim();
+  }
+
+  function findCountry(country) {
     if (!country) return null;
     const exact = new RegExp(`^${escapeRegExp(country)}$`, "i");
     const soft = new RegExp(escapeRegExp(country), "i");
@@ -48,23 +66,37 @@
     return null;
   }
 
-  function clickCountry() {
+  function clickCountry(country) {
     const now = Date.now();
     const cooldownMs = Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
-    const el = findCountry();
-    if (!el) return false;
+    const el = findCountry(country);
+    if (!el) {
+      chrome.runtime.sendMessage({
+        type: "status",
+        status: `looking for ${country}`,
+      });
+      return false;
+    }
     lastClick = now;
     el.click();
     chrome.runtime.sendMessage({
       type: "status",
-      status: `clicked ${settings.country}`,
+      status: `clicked ${country}`,
     });
     return true;
   }
 
   async function loadSettings() {
     settings = await chrome.storage.local.get(DEFAULTS);
+  }
+
+  async function rememberCountry(country) {
+    if (!country) return;
+    if (!settings.rememberLastLocation) return;
+    if (settings.lastConnectedCountry === country) return;
+    settings.lastConnectedCountry = country;
+    await chrome.storage.local.set({ lastConnectedCountry: country });
   }
 
   async function tick() {
@@ -79,14 +111,17 @@
     }
 
     if (isConnected()) {
+      const detected = detectConnectedCountry();
+      if (detected) await rememberCountry(detected);
+      const shown = detected || settings.lastConnectedCountry || settings.country || "VPN";
       chrome.runtime.sendMessage({
         type: "status",
-        status: `connected to ${settings.country}`,
+        status: `connected to ${shown}`,
       });
       return;
     }
 
-    clickCountry();
+    clickCountry(targetCountry());
   }
 
   function restartTimer() {

@@ -5,6 +5,8 @@ const DEFAULTS = {
   cooldownSeconds: 20,
   autoOpenDashboard: true,
   stopOnUpgrade: true,
+  rememberLastLocation: true,
+  lastConnectedCountry: "",
   lastStatus: "idle",
   lastAt: 0,
 };
@@ -16,16 +18,21 @@ const FIELDS = [
   "cooldownSeconds",
   "autoOpenDashboard",
   "stopOnUpgrade",
+  "rememberLastLocation",
 ];
 
 async function render() {
   const cfg = await chrome.storage.local.get(DEFAULTS);
   document.getElementById("enabled").checked = !!cfg.enabled;
+  document.getElementById("rememberLastLocation").checked = !!cfg.rememberLastLocation;
   document.getElementById("country").value = cfg.country || "Sweden";
   document.getElementById("checkSeconds").value = Number(cfg.checkSeconds) || 4;
   document.getElementById("cooldownSeconds").value = Number(cfg.cooldownSeconds) || 20;
   document.getElementById("autoOpenDashboard").checked = !!cfg.autoOpenDashboard;
   document.getElementById("stopOnUpgrade").checked = !!cfg.stopOnUpgrade;
+  document.getElementById("remembered").textContent = cfg.lastConnectedCountry
+    ? `Remembered: ${cfg.lastConnectedCountry}`
+    : "Remembered: —";
   const when = cfg.lastAt ? new Date(cfg.lastAt).toLocaleTimeString() : "";
   document.getElementById("status").textContent = when
     ? `${cfg.lastStatus} (${when})`
@@ -42,9 +49,7 @@ async function saveField(id) {
 }
 
 for (const id of FIELDS) {
-  const el = document.getElementById(id);
-  const evt = el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "change";
-  el.addEventListener(evt, () => saveField(id));
+  document.getElementById(id).addEventListener("change", () => saveField(id));
 }
 
 chrome.storage.onChanged.addListener(render);

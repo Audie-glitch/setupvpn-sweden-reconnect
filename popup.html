@@ -14,6 +14,7 @@
     }
     .status { background: #f4f4f4; padding: 8px; border-radius: 6px; word-break: break-word; margin-top: 10px; }
     .hint { color: #555; font-size: 12px; margin: 8px 0 0; }
+    .meta { color: #333; font-size: 12px; margin: 4px 0 0; }
   </style>
 </head>
 <body>
@@ -24,7 +25,12 @@
   </div>
 
   <div class="row">
-    <label class="block" for="country">Country</label>
+    <label class="check"><input id="rememberLastLocation" type="checkbox" /> Remember last connected location</label>
+    <p class="meta" id="remembered">Remembered: —</p>
+  </div>
+
+  <div class="row">
+    <label class="block" for="country">Fallback country</label>
     <select id="country">
       <option>Sweden</option>
       <option>Germany</option>
