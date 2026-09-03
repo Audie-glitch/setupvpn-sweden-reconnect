@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Pin SetupVPN reconnector</title>
+  <title>Pin SetupVPN icons</title>
   <style>
     body {
       font: 15px/1.5 system-ui, sans-serif;
@@ -12,6 +12,7 @@
       color: #111;
     }
     h1 { font-size: 22px; margin: 0 0 12px; }
+    h2 { font-size: 16px; margin: 20px 0 8px; }
     ol { padding-left: 1.2em; }
     li { margin: 8px 0; }
     .note {
@@ -20,8 +21,15 @@
       padding: 12px 14px;
       margin-top: 16px;
     }
+    .warn {
+      background: #fff4e5;
+      border-left: 4px solid #f5a623;
+      border-radius: 4px;
+      padding: 10px 12px;
+      margin: 12px 0;
+    }
     button {
-      margin-top: 16px;
+      margin: 8px 8px 0 0;
       padding: 8px 14px;
       border: 0;
       border-radius: 8px;
@@ -30,21 +38,28 @@
       font: inherit;
       cursor: pointer;
     }
+    button.secondary { background: #555; }
   </style>
 </head>
 <body>
-  <h1>Pin this extension</h1>
-  <p>Chrome does not allow extensions to pin themselves. Pin it once so the countdown and status stay visible:</p>
-  <ol>
-    <li>Click the puzzle piece in the Chrome toolbar</li>
-    <li>Find <strong>SetupVPN Sweden Reconnector</strong></li>
-    <li>Click the pin icon</li>
-  </ol>
-  <div class="note">
-    Keep the SetupVPN dashboard tab open. This helper remembers the connected country and re-clicks it when the session drops.
+  <h1>Pin both extensions in the toolbar</h1>
+  <div class="warn">
+    Chrome does <strong>not</strong> allow an extension to pin itself (or another extension) to the toolbar. You have to pin once by hand.
   </div>
-  <button id="dashboard">Open SetupVPN dashboard</button>
-  <button id="install" style="background:#555">Check / install SetupVPN</button>
+  <p>Bubble them out of the puzzle menu so SetupVPN + this reconnector stay visible:</p>
+  <ol>
+    <li>Click the <strong>puzzle piece</strong> in the Chrome toolbar</li>
+    <li>Find <strong>SetupVPN - Lifetime Free VPN</strong> → click the <strong>pin</strong></li>
+    <li>Find <strong>SetupVPN Sweden Reconnector</strong> → click the <strong>pin</strong></li>
+  </ol>
+  <h2>Why</h2>
+  <p>SetupVPN’s active link often comes from its toolbar icon. The reconnector shows status/time remaining and opens the dashboard sidebar from its icon.</p>
+  <div class="note">
+    After pinning, keep a SetupVPN dashboard tab (or the sidebar) open while connected.
+  </div>
+  <button id="dashboard">Open dashboard link</button>
+  <button id="install" class="secondary">Check / install SetupVPN</button>
+  <button id="extensions" class="secondary">Open chrome://extensions</button>
   <script src="welcome.js"></script>
 </body>
 </html>

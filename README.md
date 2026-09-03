@@ -60,3 +60,7 @@ Bubbling a location briefly focuses the SetupVPN tab. Background tabs are thrott
 ## Dashboard sidebar
 
 Popup → **Open dashboard sidebar** opens a Chrome side panel with the SetupVPN dashboard in an iframe (uses the last known `userN` host). Keep it open to watch status; bubbling still focuses a real SetupVPN tab when a trusted click is needed.
+
+## Toolbar pins
+
+Chrome does not allow auto-pinning. Pin **SetupVPN** and **SetupVPN Sweden Reconnector** via the puzzle menu so both stay in the toolbar.

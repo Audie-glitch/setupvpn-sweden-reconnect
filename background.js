@@ -211,6 +211,9 @@ function watchManagement() {
       pendingConnect: true,
     });
     await openDashboardSidebar("SetupVPN installed");
+    try {
+      chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html"), active: false });
+    } catch (_err) {}
     await openDashboardAndConnect(true);
   });
   chrome.management.onUninstalled.addListener(async (id) => {
