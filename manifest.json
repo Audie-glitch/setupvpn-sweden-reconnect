@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "Clicks country on select-location without 20s cooldown; parses timer; Continue to VPN.",
   "permissions": [
     "storage",

@@ -520,38 +520,64 @@
     return (settings.country || "Sweden").trim();
   }
 
+  function flagCode(country) {
+    const map = {
+      sweden: "se",
+      netherlands: "nl",
+      germany: "de",
+      "united states": "us",
+      usa: "us",
+      "united kingdom": "gb",
+      uk: "gb",
+      poland: "pl",
+    };
+    return map[String(country || "").toLowerCase()] || "";
+  }
+
   function findCountry(country) {
     if (!country) return null;
     const exact = new RegExp("^" + escapeRegExp(country) + "$", "i");
     const word = new RegExp("(?:^|\\b)" + escapeRegExp(country) + "(?:\\b|$)", "i");
+    const code = flagCode(country);
 
-    // Prefer Ant Design meta titles: <h4 class="ant-list-item-meta-title">Sweden</h4>
+    // Exact SetupVPN row: <li class="ant-list-item list-item">…<img src="/ui/flags/se.png">…<h4>Sweden</h4>
+    const items = document.querySelectorAll("li.ant-list-item.list-item, li.ant-list-item, li.list-item");
+    for (const li of items) {
+      const title = li.querySelector("h4.ant-list-item-meta-title, .ant-list-item-meta-title");
+      const titleText = title ? labelText(title) : "";
+      const img = li.querySelector('img[src*="/ui/flags/"], img[src*="flags/"]');
+      const src = img ? String(img.getAttribute("src") || "") : "";
+      const flagHit = code && new RegExp("/" + code + "\\.png(?:\\?|$)", "i").test(src);
+      if ((titleText && (exact.test(titleText) || word.test(titleText))) || flagHit) {
+        return li;
+      }
+    }
+
     const titles = document.querySelectorAll(
       "h4.ant-list-item-meta-title, .ant-list-item-meta-title, .ant-list-item-meta-content"
     );
     for (const title of titles) {
       const text = labelText(title);
       if (!text) continue;
-      if (exact.test(text) || word.test(text)) {
-        return countryRowFrom(title);
-      }
+      if (exact.test(text) || word.test(text)) return countryRowFrom(title);
+    }
+
+    if (code) {
+      const img = document.querySelector(
+        'img[src*="/ui/flags/' + code + '.png"], img[src*="flags/' + code + '.png"]'
+      );
+      if (img) return countryRowFrom(img);
     }
 
     const nodes = document.querySelectorAll(
-      "li, button, a, [role='button'], [role='listitem'], .ant-list-item, .ant-list-item-meta, .list-item, .ant-row, tr, div"
+      "li, button, a, [role='button'], [role='listitem'], .ant-list-item, .list-item"
     );
-    let softHit = null;
     for (const el of nodes) {
-      let text = labelText(el);
+      const text = labelText(el);
       if (!text || text.length > 80) continue;
-      if (/premium|upgrade|buy/i.test(text) && !word.test(text)) continue;
-      if (exact.test(text)) return countryRowFrom(el);
-      if (word.test(text) && text.length < 64) return countryRowFrom(el);
-      if (!softHit && text.length < 48 && word.test(text) && !/premium/i.test(text)) {
-        softHit = countryRowFrom(el);
-      }
+      if (exact.test(text) || (word.test(text) && text.length < 64)) return countryRowFrom(el);
     }
-    return softHit;
+    return null;
   }
 
   function clickCountry(country) {
