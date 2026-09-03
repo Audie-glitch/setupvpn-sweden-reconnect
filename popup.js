@@ -16,6 +16,10 @@ const DEFAULTS = {
   timeRemainingEndsAt: 0,
   lastStatus: "idle",
   lastAt: 0,
+  popupDashboardLink: "",
+  sidebarBlocked: false,
+  pendingSidebarOpen: false,
+  dashboardUrl: "",
 };
 
 const FIELDS = [
@@ -72,6 +76,32 @@ async function render() {
   document.getElementById("status").textContent = when
     ? `${cfg.lastStatus} (${when})`
     : cfg.lastStatus || "idle";
+
+  const bubble = document.getElementById("dashLinkBubble");
+  const dashA = document.getElementById("dashLink");
+  let link = cfg.popupDashboardLink || "";
+  if (!link && cfg.dashboardUrl) {
+    const m = String(cfg.dashboardUrl).match(/^(https:\/\/user\d+\.setupvpn\.com)/i);
+    link = m ? m[1] + "/ui/dashboard" : String(cfg.dashboardUrl);
+  }
+  if (bubble && dashA) {
+    const show = !!(cfg.sidebarBlocked || cfg.pendingSidebarOpen || link);
+    bubble.style.display = show && link ? "block" : show ? "block" : link ? "block" : "none";
+    if (link) {
+      dashA.textContent = link;
+      dashA.href = link;
+      bubble.style.display = "block";
+    } else {
+      dashA.textContent = "Waiting for SetupVPN host…";
+      dashA.removeAttribute("href");
+    }
+    const hint = document.getElementById("dashLinkHint");
+    if (hint) {
+      hint.textContent = cfg.sidebarBlocked
+        ? "Sidebar blocked by Chrome — tap the link (or Open sidebar)."
+        : "Live dashboard link";
+    }
+  }
 }
 
 async function saveField(id) {
@@ -93,18 +123,43 @@ render();
 
 (async function maybeOpenSidebarFromPopup() {
   try {
-    const { pendingSidebarOpen, autoOpenSidebar } = await chrome.storage.local.get({
+    const cfg = await chrome.storage.local.get({
       pendingSidebarOpen: false,
       autoOpenSidebar: true,
+      sidebarBlocked: false,
+      popupDashboardLink: "",
+      dashboardUrl: "",
     });
-    if (!pendingSidebarOpen || autoOpenSidebar === false) return;
-    if (!chrome.sidePanel || !chrome.sidePanel.open) return;
-    const win = await chrome.windows.getCurrent();
-    await chrome.sidePanel.open({ windowId: win.id });
-    await chrome.storage.local.set({ pendingSidebarOpen: false });
+    // Always refresh link into popup when opening
+    chrome.runtime.sendMessage({ type: "resolveDashLink" }, () => {
+      void chrome.runtime.lastError;
+      render();
+    });
+
+    if (!cfg.pendingSidebarOpen && !cfg.sidebarBlocked) return;
+    if (cfg.autoOpenSidebar === false) {
+      await render();
+      return;
+    }
+    if (!chrome.sidePanel || !chrome.sidePanel.open) {
+      await chrome.storage.local.set({ sidebarBlocked: true });
+      await render();
+      return;
+    }
     try {
-      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
-    } catch (_err) {}
+      const win = await chrome.windows.getCurrent();
+      await chrome.sidePanel.open({ windowId: win.id });
+      await chrome.storage.local.set({
+        pendingSidebarOpen: false,
+        sidebarBlocked: false,
+      });
+      try {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      } catch (_err) {}
+    } catch (_err) {
+      await chrome.storage.local.set({ sidebarBlocked: true, pendingSidebarOpen: true });
+    }
+    await render();
   } catch (_err) {}
 })();
 
@@ -125,7 +180,13 @@ document.getElementById("installSetupvpn").addEventListener("click", (e) => {
   chrome.runtime.sendMessage({ type: "checkSetupVpn", forcePrompt: true }, (state) => {
     void chrome.runtime.lastError;
     if (state && state.setupvpnInstalled && state.setupvpnEnabled) {
-      chrome.tabs.create({ url: "https://user3.setupvpn.com/ui/dashboard" });
+      chrome.storage.local.get({ dashboardUrl: "", popupDashboardLink: "" }, (s) => {
+        const m = String(s.popupDashboardLink || s.dashboardUrl || "").match(
+          /^(https:\/\/user\d+\.setupvpn\.com)/i
+        );
+        const url = m ? m[1] + "/ui/dashboard" : "https://user7.setupvpn.com/ui/dashboard";
+        chrome.tabs.create({ url });
+      });
     } else {
       chrome.tabs.create({ url: chrome.runtime.getURL("install-setupvpn.html") });
     }

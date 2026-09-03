@@ -189,6 +189,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
   }
+  if (msg.type === "resolveDashLink") {
+    resolveDashboardLink()
+      .then(async (link) => {
+        await chrome.storage.local.set({ popupDashboardLink: link || "" });
+        sendResponse({ ok: true, link });
+      })
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
 });
 
 function watchManagement() {
@@ -374,15 +383,64 @@ async function openDashboardAndConnect(markPending) {
 }
 
 
+async function resolveDashboardLink() {
+  const { dashboardUrl } = await chrome.storage.local.get({ dashboardUrl: "" });
+  let url = String(dashboardUrl || "");
+  const m = url.match(/^(https:\/\/user\d+\.setupvpn\.com)/i);
+  if (m) return m[1] + "/ui/dashboard";
+  try {
+    const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
+    for (const tab of tabs) {
+      const tm = String(tab.url || "").match(/^(https:\/\/user\d+\.setupvpn\.com)/i);
+      if (tm) {
+        const dash = tm[1] + "/ui/dashboard";
+        await chrome.storage.local.set({ dashboardUrl: dash });
+        return dash;
+      }
+    }
+  } catch (_err) {}
+  return url || "";
+}
+
+async function bubbleDashboardLinkInPopup(reason) {
+  const link = await resolveDashboardLink();
+  await chrome.storage.local.set({
+    pendingSidebarOpen: true,
+    sidebarBlocked: true,
+    popupDashboardLink: link,
+  });
+  await setStatus(
+    link
+      ? "sidebar blocked — open popup for link: " + link
+      : "sidebar blocked — open popup (waiting for SetupVPN host)"
+  );
+  try {
+    await chrome.action.setBadgeText({ text: "link" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#b42318" });
+    if (link) await chrome.action.setTitle({ title: "Dashboard: " + link });
+  } catch (_err) {}
+  return link;
+}
+
 async function openDashboardSidebar(reason) {
   const { autoOpenSidebar } = await chrome.storage.local.get({ autoOpenSidebar: true });
-  if (autoOpenSidebar === false) return false;
-  if (!chrome.sidePanel || !chrome.sidePanel.open) return false;
+  if (autoOpenSidebar === false) {
+    await bubbleDashboardLinkInPopup(reason || "sidebar disabled");
+    return false;
+  }
+  if (!chrome.sidePanel || !chrome.sidePanel.open) {
+    await bubbleDashboardLinkInPopup(reason || "no sidePanel API");
+    return false;
+  }
   try {
     await chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
     const win = await chrome.windows.getLastFocused({ populate: false });
     if (win && win.id != null) {
       await chrome.sidePanel.open({ windowId: win.id });
+      await chrome.storage.local.set({
+        pendingSidebarOpen: false,
+        sidebarBlocked: false,
+      });
       await setStatus(
         reason ? "sidebar opened — " + reason : "opened SetupVPN dashboard sidebar"
       );
@@ -391,9 +449,8 @@ async function openDashboardSidebar(reason) {
   } catch (err) {
     // Chrome often requires a user gesture for sidePanel.open
     console.warn("sidePanel.open failed", err);
-    await setStatus("SetupVPN installed — click extension icon → Open dashboard sidebar");
-    await chrome.storage.local.set({ pendingSidebarOpen: true });
   }
+  await bubbleDashboardLinkInPopup(reason || "gesture required");
   return false;
 }
 
