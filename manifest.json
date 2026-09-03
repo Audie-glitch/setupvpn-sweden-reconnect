@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.6.0",
-  "description": "Automates SetupVPN flow: Next \u2192 Connect to VPN \u2192 agree \u2192 select country. Chrome Add extension confirm still needs one click.",
+  "version": "1.6.1",
+  "description": "Waits for you to Add to Chrome + Accept, then auto: Next \u2192 Connect to VPN \u2192 agree \u2192 country.",
   "permissions": [
     "storage",
     "alarms",

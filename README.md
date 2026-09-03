@@ -7,9 +7,9 @@ It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the 
 ## Install → agree → connect
 
 On install **or Reload** of this helper (or via the popup action), if SetupVPN is missing:
-1. Opens the SetupVPN Web Store page and clicks **Add to Chrome** when it can
-2. You click Chrome’s **Add extension** confirm (required by Chrome; cannot be automated by an extension)
-3. On SetupVPN install/enable, opens the dashboard/guest page, auto-checks Terms + 18+, continues, then connects to the remembered/fallback country
+1. Opens the SetupVPN Web Store page and **waits** for you to click **Add to Chrome** and Accept the Chrome popup
+2. When SetupVPN appears, advances **Next → Connect to VPN → agree → country** automatically
+3. (Optional) popup toggle can re-enable auto-clicking Add to Chrome
 
 ## SetupVPN required
 

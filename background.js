@@ -38,6 +38,7 @@ const DEFAULTS = {
   setupvpnEnabled: false,
   pendingConnect: false,
   autoAgreeGuest: true,
+  autoClickAddToChrome: false,
   lastInstallPromptAt: 0,
   lastStatus: "installed",
   lastAt: Date.now(),
@@ -135,7 +136,7 @@ function watchManagement() {
   if (!chrome.management) return;
   chrome.management.onInstalled.addListener(async (info) => {
     if (!info || info.id !== SETUPVPN_ID) return;
-    await setStatus("SetupVPN installed — connecting");
+    await setStatus("SetupVPN installed — running Next → Connect → agree → country");
     await chrome.storage.local.set({
       setupvpnInstalled: true,
       setupvpnEnabled: true,
@@ -235,7 +236,7 @@ async function maybeOpenStore(forcePrompt) {
     tabId = tab.id;
   }
   await chrome.storage.local.set({ lastInstallPromptAt: Date.now() });
-  await setStatus("SetupVPN missing — open Web Store, then click Add extension");
+  await setStatus("Waiting — click Add to Chrome, then Accept on the popup");
 
   // Content scripts can miss the new Web Store shadow DOM; also inject on load.
   const onUpdated = async (id, info) => {
