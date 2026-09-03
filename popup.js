@@ -7,6 +7,8 @@ const DEFAULTS = {
   stopOnUpgrade: true,
   rememberLastLocation: true,
   lastConnectedCountry: "",
+  setupvpnInstalled: false,
+  setupvpnEnabled: false,
   timeRemainingText: "",
   timeRemainingEndsAt: 0,
   lastStatus: "idle",
@@ -42,6 +44,11 @@ async function render() {
   document.getElementById("cooldownSeconds").value = Number(cfg.cooldownSeconds) || 20;
   document.getElementById("autoOpenDashboard").checked = !!cfg.autoOpenDashboard;
   document.getElementById("stopOnUpgrade").checked = !!cfg.stopOnUpgrade;
+  const sv = document.getElementById("setupvpnStatus");
+  if (!cfg.setupvpnInstalled) sv.textContent = "SetupVPN: not installed";
+  else if (!cfg.setupvpnEnabled) sv.textContent = "SetupVPN: installed but disabled";
+  else sv.textContent = "SetupVPN: installed";
+
   document.getElementById("remembered").textContent = cfg.lastConnectedCountry
     ? `Remembered: ${cfg.lastConnectedCountry}`
     : "Remembered: —";
@@ -85,4 +92,15 @@ document.getElementById("webstore").addEventListener("click", (e) => {
 document.getElementById("pinHelp").addEventListener("click", (e) => {
   e.preventDefault();
   chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+});
+
+document.getElementById("installSetupvpn").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.runtime.sendMessage({ type: "checkSetupVpn", forcePrompt: true }, (state) => {
+    if (state && state.setupvpnInstalled && state.setupvpnEnabled) {
+      chrome.tabs.create({ url: "https://user3.setupvpn.com/ui/dashboard" });
+    } else {
+      chrome.tabs.create({ url: chrome.runtime.getURL("install-setupvpn.html") });
+    }
+  });
 });
