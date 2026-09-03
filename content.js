@@ -24,6 +24,33 @@
   let lastSavedEndsAt = 0;
   let ticking = false;
   let obsTimer = null;
+  let dead = false;
+
+  function contextAlive() {
+    try {
+      return !dead && !!(chrome.runtime && chrome.runtime.id);
+    } catch (_err) {
+      dead = true;
+      return false;
+    }
+  }
+
+  function kill(reason) {
+    if (dead) return;
+    dead = true;
+    watching = false;
+    if (timer) {
+      try {
+        clearInterval(timer);
+      } catch (_err) {}
+      timer = null;
+    }
+    try {
+      if (obs) obs.disconnect();
+    } catch (_err) {}
+    console.debug("setupvpn-reconnector stopped:", reason || "extension context invalidated — refresh this tab");
+  }
+
 
   function bodyText() {
     try {
@@ -39,11 +66,15 @@
   }
 
   function safeSend(status) {
+    if (!contextAlive()) return;
     try {
       chrome.runtime.sendMessage({ type: "status", status }, () => {
-        void chrome.runtime.lastError;
+        const err = chrome.runtime.lastError;
+        if (err && /context invalidated/i.test(String(err.message || err))) kill("sendMessage");
       });
-    } catch (_err) {}
+    } catch (err) {
+      if (/context invalidated/i.test(String(err))) kill("sendMessage");
+    }
   }
 
   function labelText(el) {
@@ -89,11 +120,14 @@
   }
 
   async function rememberDashboardHost() {
+    if (!contextAlive()) return;
     try {
       const m = String(href()).match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
       if (!m) return;
       await chrome.storage.local.set({ dashboardUrl: m[1] + "/ui/dashboard" });
-    } catch (_err) {}
+    } catch (err) {
+      if (/context invalidated/i.test(String(err))) kill("rememberDashboardHost");
+    }
   }
 
   function findCheckboxNear(textRe) {
@@ -366,9 +400,14 @@
   }
 
   async function loadSettings() {
+    if (!contextAlive()) {
+      settings = { ...DEFAULTS };
+      return;
+    }
     try {
       settings = await chrome.storage.local.get(DEFAULTS);
-    } catch (_err) {
+    } catch (err) {
+      if (/context invalidated/i.test(String(err))) kill("loadSettings");
       settings = { ...DEFAULTS };
     }
   }
@@ -413,10 +452,15 @@
   }
 
   async function tick() {
-    if (!watching || ticking) return;
+    if (dead || !watching || ticking) return;
+    if (!contextAlive()) {
+      kill("tick");
+      return;
+    }
     ticking = true;
     try {
       await loadSettings();
+      if (dead) return;
       await rememberDashboardHost();
       if (!settings.enabled) return;
 
@@ -468,6 +512,10 @@
 
       clickCountry(targetCountry());
     } catch (err) {
+      if (/context invalidated/i.test(String(err))) {
+        kill("tick");
+        return;
+      }
       console.warn("setupvpn-reconnector tick failed", err);
     } finally {
       ticking = false;
@@ -494,15 +542,24 @@
     autoAgreeGuest: true,
   };
 
-  chrome.storage.onChanged.addListener(async (changes, area) => {
-    if (area && area !== "local") return;
-    const touched = Object.keys(changes || {});
-    if (!touched.some((k) => CONFIG_KEYS[k])) return;
-    watching = true;
-    await loadSettings();
-    restartTimer();
-    tick();
-  });
+  try {
+    chrome.storage.onChanged.addListener(async (changes, area) => {
+      if (dead) return;
+      if (!contextAlive()) {
+        kill("onChanged");
+        return;
+      }
+      if (area && area !== "local") return;
+      const touched = Object.keys(changes || {});
+      if (!touched.some((k) => CONFIG_KEYS[k])) return;
+      watching = true;
+      await loadSettings();
+      restartTimer();
+      tick();
+    });
+  } catch (_err) {
+    kill("onChanged bind");
+  }
 
   const obs = new MutationObserver(() => {
     if (obsTimer) return;
@@ -515,8 +572,13 @@
     obs.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  loadSettings().then(() => {
-    restartTimer();
-    tick();
-  });
+  if (contextAlive()) {
+    loadSettings().then(() => {
+      if (dead) return;
+      restartTimer();
+      tick();
+    });
+  } else {
+    kill("boot");
+  }
 })();
