@@ -426,21 +426,44 @@
   function findCountry(country) {
     if (!country) return null;
     const exact = new RegExp("^" + escapeRegExp(country) + "$", "i");
+    const word = new RegExp("(?:^|\\b)" + escapeRegExp(country) + "(?:\\b|$)", "i");
     const soft = new RegExp(escapeRegExp(country), "i");
     const nodes = document.querySelectorAll(
-      "li, button, a, [role='button'], .ant-list-item, .list-item"
+      "li, button, a, [role='button'], [role='listitem'], .ant-list-item, .ant-list-item-meta, .list-item, .ant-row, tr, div"
     );
+    let softHit = null;
     for (const el of nodes) {
-      const text = labelText(el);
+      // Skip huge containers
+      let text = labelText(el);
+      if (!text || text.length > 80) continue;
+      if (/premium|upgrade|buy/i.test(text) && !word.test(text)) continue;
       if (exact.test(text)) return el;
-      if (soft.test(text) && text.length < 48 && !/premium/i.test(text)) return el;
+      if (word.test(text) && text.length < 64) {
+        // Prefer the clickable row ancestor
+        const row =
+          el.closest(
+            "li, .ant-list-item, [role='listitem'], [role='button'], button, a, tr"
+          ) || el;
+        return row;
+      }
+      if (!softHit && soft.test(text) && text.length < 48 && !/premium/i.test(text)) {
+        softHit =
+          el.closest(
+            "li, .ant-list-item, [role='listitem'], [role='button'], button, a, tr"
+          ) || el;
+      }
     }
-    return null;
+    return softHit;
   }
 
   function clickCountry(country) {
     const now = Date.now();
-    const cooldownMs = Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
+    // After Continue/agree, don't wait the full reconnect cooldown — only 1.2s.
+    // Full cooldown applies once already connected and we might re-click.
+    const reconnecting = !!settings.pendingConnect || !isConnected();
+    const cooldownMs = reconnecting
+      ? 1200
+      : Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
     const el = findCountry(country);
     if (!el) {
@@ -448,10 +471,20 @@
       return false;
     }
     lastClick = now;
+    forceClick(el);
+    // Also click an inner primary control if the row itself is inert
     try {
-      el.click();
+      const inner =
+        el.querySelector("button, [role='button'], a, .ant-btn") || null;
+      if (inner && inner !== el) forceClick(inner);
     } catch (_err) {}
     safeSend("clicked " + country);
+    if (settings.pendingConnect) {
+      settings.pendingConnect = false;
+      try {
+        chrome.storage.local.set({ pendingConnect: false });
+      } catch (_err) {}
+    }
     return true;
   }
 
@@ -581,7 +614,14 @@
   function restartTimer() {
     if (timer) clearInterval(timer);
     let sec = Math.max(2, Number(settings.checkSeconds) || 4);
-    if (isLoginPage() || settings.pendingConnect) sec = Math.min(sec, 2);
+    if (
+      isLoginPage() ||
+      isGuestPage() ||
+      isSelectionPage() ||
+      settings.pendingConnect
+    ) {
+      sec = Math.min(sec, 2);
+    }
     const ms = sec * 1000;
     timer = setInterval(tick, ms);
   }

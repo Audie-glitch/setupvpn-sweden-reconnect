@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.6.4",
-  "description": "Parses Time remaining from dashboard; clicks Continue to VPN; recovers stale hosts.",
+  "version": "1.6.5",
+  "description": "Clicks country on select-location without 20s cooldown; parses timer; Continue to VPN.",
   "permissions": [
     "storage",
     "alarms",
