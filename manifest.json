@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.6.9",
+  "version": "1.6.10",
   "description": "Waits for SetupVPN to open its own userN tab; does not force user2/login. Then Continue \u2192 agree \u2192 country.",
   "permissions": [
     "storage",

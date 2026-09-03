@@ -353,6 +353,10 @@
 
   // Step: /ui/?d=... or dashboard onboarding overlay → Next
   function advanceOnboarding() {
+    // Don't click Next while the location list is still loading
+    if (onSelectLocationScreen() && !locationsReady() && /select location|free servers/i.test(bodyText())) {
+      return false;
+    }
     const t = bodyText();
     const looksLikeWizard =
       isOnboardingQueryPage() ||
@@ -513,7 +517,34 @@
     );
   }
 
-  function targetCountry() {
+  function locationsReady() {
+    // Wait until Free-server rows exist (not just the "Select location" chrome).
+    const items = document.querySelectorAll(
+      "li.ant-list-item.list-item, li.ant-list-item, .ant-list-item"
+    );
+    if (items.length < 2) return false;
+    let titled = 0;
+    let flagged = 0;
+    for (const li of items) {
+      const title = li.querySelector("h4.ant-list-item-meta-title, .ant-list-item-meta-title");
+      if (title && labelText(title)) titled += 1;
+      if (li.querySelector('img[src*="/ui/flags/"], img[src*="flags/"]')) flagged += 1;
+    }
+    // Need a few real country rows, not an empty/skeleton list
+    return titled >= 2 || flagged >= 2;
+  }
+
+  function onSelectLocationScreen() {
+    const t = bodyText();
+    return (
+      isSelectionPage() ||
+      /select location/i.test(t) ||
+      /select a country to start vpn/i.test(t) ||
+      /free servers/i.test(t)
+    );
+  }
+
+    function targetCountry() {
     if (settings.rememberLastLocation && settings.lastConnectedCountry) {
       return settings.lastConnectedCountry;
     }
@@ -587,6 +618,10 @@
       ? 1000
       : Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
+    if (!locationsReady()) {
+      safeSend("waiting for locations to load");
+      return false;
+    }
     const el = findCountry(country);
     if (!el) {
       safeSend("looking for " + country);
@@ -726,6 +761,13 @@
 
       // Only hammer country clicks on selection/dashboard, not login/onboarding
       if (isLoginPage() || isOnboardingQueryPage() || isGuestPage()) return;
+
+      if (onSelectLocationScreen() || isDashboardPage()) {
+        if (!locationsReady()) {
+          safeSend("waiting for locations to load");
+          return;
+        }
+      }
 
       clickCountry(targetCountry());
     } catch (err) {
