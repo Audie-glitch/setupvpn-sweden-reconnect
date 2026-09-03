@@ -123,19 +123,54 @@
     return !!input.checked;
   }
 
+  function forceClick(el) {
+    if (!el) return false;
+    try {
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+    } catch (_err) {}
+    const opts = { bubbles: true, cancelable: true, view: window };
+    try {
+      el.dispatchEvent(new PointerEvent("pointerdown", opts));
+      el.dispatchEvent(new MouseEvent("mousedown", opts));
+      el.dispatchEvent(new PointerEvent("pointerup", opts));
+      el.dispatchEvent(new MouseEvent("mouseup", opts));
+      el.dispatchEvent(new MouseEvent("click", opts));
+    } catch (_err) {
+      try {
+        el.click();
+      } catch (_err2) {}
+    }
+    return true;
+  }
+
+  function allClickables() {
+    const sel =
+      "button, [role='button'], a, a.ant-btn, a.ant-btn-primary, input[type='button'], input[type='submit'], .ant-btn, div.ant-btn, span.ant-btn";
+    const out = Array.from(document.querySelectorAll(sel));
+    // Also any element whose own short text matches later filters
+    for (const el of document.querySelectorAll("div, span, p, section")) {
+      const t = labelText(el);
+      if (!t || t.length > 40) continue;
+      if (/^connect( to vpn)?$/i.test(t) || /^continue to vpn$/i.test(t) || /^continue as guest$/i.test(t) || /^continue$/i.test(t) || /^next$/i.test(t)) {
+        out.push(el);
+      }
+    }
+    return out;
+  }
+
   function clickLabeledButton(patterns) {
-    const buttons = document.querySelectorAll(
-      "button, [role='button'], a.ant-btn, a.ant-btn-primary, input[type='button'], input[type='submit']"
-    );
+    const buttons = allClickables();
     for (const el of buttons) {
-      const t = labelText(el) || el.value || "";
+      const t = labelText(el) || el.value || el.getAttribute("aria-label") || "";
       const text = String(t).replace(/\s+/g, " ").trim();
       if (!text || text.length > 80) continue;
       for (const re of patterns) {
         if (re.test(text)) {
-          try {
-            el.click();
-          } catch (_err) {}
+          // Prefer the closest button-like ancestor if we matched a span/div text node wrapper
+          let target = el;
+          const btn = el.closest("button, [role='button'], a.ant-btn, .ant-btn, a");
+          if (btn) target = btn;
+          forceClick(target);
           return text;
         }
       }
@@ -143,9 +178,31 @@
     return null;
   }
 
-  function coolClick(patterns, statusPrefix) {
+  function isStaleLinkPage() {
+    const t = bodyText();
+    return (
+      /update connection/i.test(t) &&
+      /no longer your active link|click on the setupvpn icon/i.test(t)
+    );
+  }
+
+  function reportStaleLink() {
     const now = Date.now();
-    if (now - lastClick < 1500) return false;
+    if (now - lastClick < 4000) return true;
+    lastClick = now;
+    safeSend("stale link — finding active host");
+    try {
+      chrome.runtime.sendMessage({ type: "staleLink", url: href() }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch (_err) {}
+    return true;
+  }
+
+  function coolClick(patterns, statusPrefix, minGapMs) {
+    const now = Date.now();
+    const gap = minGapMs == null ? 1200 : minGapMs;
+    if (now - lastClick < gap) return false;
     const clicked = clickLabeledButton(patterns);
     if (!clicked) return false;
     lastClick = now;
@@ -175,19 +232,30 @@
     );
   }
 
-  // Step: /ui/login → Connect to VPN
+  // Step: /ui/login → Continue to VPN (also legacy Connect to VPN)
   function clickConnectToVpn() {
-    if (!isLoginPage() && !/connect to vpn/i.test(bodyText())) return false;
+    const t = bodyText();
+    const onLogin =
+      isLoginPage() ||
+      /continue to vpn/i.test(t) ||
+      /connect to vpn/i.test(t) ||
+      /continue to start vpn connection/i.test(t) ||
+      (/log ?in/i.test(t) && /connect|vpn/i.test(t));
+    if (!onLogin) return false;
     return coolClick(
       [
+        /^continue to vpn$/i,
+        /continue to vpn/i,
         /^connect to vpn$/i,
         /connect to vpn/i,
+        /^continue$/i,
         /^connect$/i,
         /^start connection$/i,
         /^continue as guest$/i,
         /^guest$/i,
       ],
-      "login"
+      "login",
+      800
     );
   }
 
@@ -352,6 +420,11 @@
       await rememberDashboardHost();
       if (!settings.enabled) return;
 
+      if (isStaleLinkPage()) {
+        reportStaleLink();
+        return;
+      }
+
       // Full flow order:
       // 1) /ui/?d=... Next
       // 2) dashboard Next (intro)
@@ -403,7 +476,9 @@
 
   function restartTimer() {
     if (timer) clearInterval(timer);
-    const ms = Math.max(2, Number(settings.checkSeconds) || 4) * 1000;
+    let sec = Math.max(2, Number(settings.checkSeconds) || 4);
+    if (isLoginPage() || settings.pendingConnect) sec = Math.min(sec, 2);
+    const ms = sec * 1000;
     timer = setInterval(tick, ms);
   }
 

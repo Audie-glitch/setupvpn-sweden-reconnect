@@ -130,6 +130,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((err) => sendResponse({ error: String(err) }));
     return true;
   }
+  if (msg.type === "staleLink") {
+    findActiveHostAndOpen(msg.url)
+      .then((url) => sendResponse({ ok: true, url }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
 });
 
 function watchManagement() {
@@ -255,21 +261,72 @@ async function maybeOpenStore(forcePrompt) {
   } catch (_err) {}
 }
 
+
+async function findActiveHostAndOpen(badUrl) {
+  await setStatus("stale link — probing live hosts");
+  const badHost = String(badUrl || "").match(/https:\/\/user(\d+)\.setupvpn\.com/i);
+  const skip = badHost ? Number(badHost[1]) : -1;
+  // Prefer hosts that recently worked; try login pages.
+  const order = [2, 1, 7, 6, 4, 3, 5, 8, 9, 10, 11, 12].filter((n) => n !== skip);
+  for (const n of order) {
+    const login = `https://user${n}.setupvpn.com/ui/login`;
+    try {
+      const res = await fetch(login, { method: "GET", credentials: "omit", cache: "no-store" });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (/no longer your active link|Update Connection/i.test(text)) continue;
+      // SPA shells often don't include the wall in first HTML — still try navigating.
+      await chrome.storage.local.set({
+        dashboardUrl: `https://user${n}.setupvpn.com/ui/dashboard`,
+        pendingConnect: true,
+      });
+      const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
+      if (tabs.length) {
+        await chrome.tabs.update(tabs[0].id, { url: login, active: true });
+      } else {
+        await chrome.tabs.create({ url: login, active: true });
+      }
+      await setStatus(`opened user${n} login — clicking Connect`);
+      return login;
+    } catch (_err) {}
+  }
+  // Last resort: tell user to click SetupVPN icon
+  await setStatus("stale link — click the SetupVPN toolbar icon once");
+  return null;
+}
+
 async function openDashboardAndConnect(markPending) {
   if (markPending) {
     await chrome.storage.local.set({ pendingConnect: true });
   }
+  const dash = await resolveDashboardUrl();
+  const login = dash.replace(/\/ui\/dashboard\/?$/i, "/ui/login");
   const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
-  if (tabs.length === 0) {
-    const url = await resolveDashboardUrl();
-    await chrome.tabs.create({ url, active: true });
-    await setStatus("opened dashboard — connecting");
+
+  // Prefer an existing login tab if present
+  const loginTab = tabs.find((t) => /\/ui\/login/i.test(t.url || ""));
+  if (loginTab) {
+    await rememberDashboardFromTab(loginTab.url);
+    await chrome.tabs.update(loginTab.id, { active: true });
+    await setStatus("login focused — clicking Connect");
     return;
   }
+
+  if (tabs.length === 0) {
+    await chrome.tabs.create({ url: login, active: true });
+    await setStatus("opened login — connecting");
+    return;
+  }
+
   const active = tabs[0];
   const url = active.url || "";
   await rememberDashboardFromTab(url);
-  // Keep whatever step of the flow is already open.
+  // If on stale Update Connection dashboard, jump to login on a preferred host
+  if (/user3\.setupvpn\.com/i.test(url) || /\/ui\/dashboard/i.test(url)) {
+    await chrome.tabs.update(active.id, { url: login, active: true });
+    await setStatus("switched to login — clicking Connect");
+    return;
+  }
   await chrome.tabs.update(active.id, { active: true });
   await setStatus("SetupVPN UI focused — advancing flow");
 }
