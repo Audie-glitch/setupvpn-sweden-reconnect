@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; width: 260px; }
+    h1 { font-size: 14px; margin: 0 0 8px; }
+    p { margin: 6px 0; color: #333; }
+    label { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+    .status { background: #f4f4f4; padding: 8px; border-radius: 6px; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h1>Sweden reconnector</h1>
+  <label>
+    <input id="enabled" type="checkbox" />
+    Re-click Sweden when disconnected
+  </label>
+  <p class="status" id="status">…</p>
+  <p>Stops if SetupVPN shows an upgrade wall. Does not change SetupVPN itself.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
