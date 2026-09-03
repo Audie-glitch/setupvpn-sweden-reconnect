@@ -1,6 +1,7 @@
 (function () {
   const UPGRADE = /upgrade|need to upgrade|get premium|premium required|trial ended|buy premium/i;
   const CONNECTED_TO = /connected to\s+([A-Za-z][A-Za-z .'-]{1,40})/i;
+  const TIME_REMAINING = /time remaining\s+(\d{1,2}):(\d{2}):(\d{2})/i;
   const DEFAULTS = {
     enabled: true,
     country: "Sweden",
@@ -9,12 +10,15 @@
     stopOnUpgrade: true,
     rememberLastLocation: true,
     lastConnectedCountry: "",
+    timeRemainingText: "",
+    timeRemainingEndsAt: 0,
   };
 
   let lastClick = 0;
   let watching = true;
   let timer = null;
   let settings = { ...DEFAULTS };
+  let lastSavedEndsAt = 0;
 
   function bodyText() {
     return (document.body && document.body.innerText) || "";
@@ -35,12 +39,23 @@
     return m[1].replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
   }
 
+  function detectTimeRemaining() {
+    const m = bodyText().match(TIME_REMAINING);
+    if (!m) return null;
+    const hours = Number(m[1]);
+    const minutes = Number(m[2]);
+    const seconds = Number(m[3]);
+    const totalMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+    const text = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return { text, endsAt: Date.now() + totalMs };
+  }
+
   function isConnected() {
     const t = bodyText();
     return (
       CONNECTED_TO.test(t) ||
       /you are successfully connected/i.test(t) ||
-      /time remaining/i.test(t)
+      TIME_REMAINING.test(t)
     );
   }
 
@@ -99,6 +114,32 @@
     await chrome.storage.local.set({ lastConnectedCountry: country });
   }
 
+  async function saveTimeRemaining(info) {
+    if (!info) {
+      if (settings.timeRemainingText || settings.timeRemainingEndsAt) {
+        settings.timeRemainingText = "";
+        settings.timeRemainingEndsAt = 0;
+        lastSavedEndsAt = 0;
+        await chrome.storage.local.set({
+          timeRemainingText: "",
+          timeRemainingEndsAt: 0,
+        });
+      }
+      return;
+    }
+    // Only write when the clock jumps by more than ~2s to avoid storage spam
+    if (Math.abs(info.endsAt - lastSavedEndsAt) < 2000 && settings.timeRemainingText === info.text) {
+      return;
+    }
+    lastSavedEndsAt = info.endsAt;
+    settings.timeRemainingText = info.text;
+    settings.timeRemainingEndsAt = info.endsAt;
+    await chrome.storage.local.set({
+      timeRemainingText: info.text,
+      timeRemainingEndsAt: info.endsAt,
+    });
+  }
+
   async function tick() {
     if (!watching) return;
     await loadSettings();
@@ -106,6 +147,7 @@
 
     if (settings.stopOnUpgrade && isUpgrade()) {
       watching = false;
+      await saveTimeRemaining(null);
       chrome.runtime.sendMessage({ type: "status", status: "upgrade wall — stopped" });
       return;
     }
@@ -113,14 +155,17 @@
     if (isConnected()) {
       const detected = detectConnectedCountry();
       if (detected) await rememberCountry(detected);
+      await saveTimeRemaining(detectTimeRemaining());
       const shown = detected || settings.lastConnectedCountry || settings.country || "VPN";
+      const rem = settings.timeRemainingText ? ` · ${settings.timeRemainingText} left` : "";
       chrome.runtime.sendMessage({
         type: "status",
-        status: `connected to ${shown}`,
+        status: `connected to ${shown}${rem}`,
       });
       return;
     }
 
+    await saveTimeRemaining(null);
     clickCountry(targetCountry());
   }
 

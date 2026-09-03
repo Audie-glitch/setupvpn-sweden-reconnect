@@ -16,6 +16,7 @@ It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the 
 - **Enabled** — turn the helper on/off
 - **Remember last connected location** — detect `Connected to X`, store it, reconnect there on drop
 - **Fallback country** — used only when nothing has been remembered yet
+- **Time remaining** — live countdown from the dashboard while connected
 - **Check every** — how often to look at the dashboard
 - **Click cooldown** — minimum time between clicks
 - **Auto-open dashboard** — open the UI tab if none is present

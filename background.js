@@ -10,6 +10,8 @@ const DEFAULTS = {
   stopOnUpgrade: true,
   rememberLastLocation: true,
   lastConnectedCountry: "",
+  timeRemainingText: "",
+  timeRemainingEndsAt: 0,
   lastStatus: "installed",
   lastAt: Date.now(),
 };

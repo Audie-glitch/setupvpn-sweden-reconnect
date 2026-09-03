@@ -7,6 +7,8 @@ const DEFAULTS = {
   stopOnUpgrade: true,
   rememberLastLocation: true,
   lastConnectedCountry: "",
+  timeRemainingText: "",
+  timeRemainingEndsAt: 0,
   lastStatus: "idle",
   lastAt: 0,
 };
@@ -21,6 +23,16 @@ const FIELDS = [
   "rememberLastLocation",
 ];
 
+function formatRemaining(endsAt) {
+  const ms = Number(endsAt) - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 async function render() {
   const cfg = await chrome.storage.local.get(DEFAULTS);
   document.getElementById("enabled").checked = !!cfg.enabled;
@@ -33,6 +45,13 @@ async function render() {
   document.getElementById("remembered").textContent = cfg.lastConnectedCountry
     ? `Remembered: ${cfg.lastConnectedCountry}`
     : "Remembered: —";
+
+  const live = formatRemaining(cfg.timeRemainingEndsAt);
+  const countdown = live || cfg.timeRemainingText || null;
+  document.getElementById("countdown").textContent = countdown
+    ? `Time remaining: ${countdown}`
+    : "Time remaining: —";
+
   const when = cfg.lastAt ? new Date(cfg.lastAt).toLocaleTimeString() : "";
   document.getElementById("status").textContent = when
     ? `${cfg.lastStatus} (${when})`
@@ -53,6 +72,7 @@ for (const id of FIELDS) {
 }
 
 chrome.storage.onChanged.addListener(render);
+setInterval(render, 1000);
 render();
 
 document.getElementById("webstore").addEventListener("click", (e) => {
