@@ -85,18 +85,37 @@
     return !!input.checked;
   }
 
-  function clickContinue() {
-    const buttons = [...document.querySelectorAll("button, [role='button'], a.ant-btn")];
+  function clickLabeledButton(patterns) {
+    const buttons = [...document.querySelectorAll("button, [role='button'], a.ant-btn, a, div[role='button']")];
     for (const el of buttons) {
       const t = labelText(el);
-      if (/^(continue|agree|accept|confirm|get started|next)$/i.test(t)) {
-        el.click();
-        return true;
+      if (!t || t.length > 60) continue;
+      for (const re of patterns) {
+        if (re.test(t)) {
+          el.click();
+          return t;
+        }
       }
-      if (/continue|agree|accept|i am 18/i.test(t) && t.length < 40) {
-        el.click();
-        return true;
-      }
+    }
+    return null;
+  }
+
+  function clickContinue() {
+    return !!clickLabeledButton([
+      /^(continue|agree|accept|confirm|get started|next)$/i,
+      /^(start connection|start connecting|connect now|connect)$/i,
+      /continue|agree|accept|i am 18|start connection/i,
+    ]);
+  }
+
+  function clickStartConnection() {
+    const clicked = clickLabeledButton([
+      /^(start connection|start connecting|connect now|connect|reconnect)$/i,
+      /start connection/i,
+    ]);
+    if (clicked) {
+      safeSend(`clicked ${clicked}`);
+      return true;
     }
     return false;
   }
@@ -273,6 +292,14 @@
     }
 
     await saveTimeRemaining(null);
+
+    // SetupVPN sometimes shows a "Start connection" CTA before the country list.
+    const now = Date.now();
+    if (now - lastClick > 1500 && clickStartConnection()) {
+      lastClick = now;
+      return;
+    }
+
     // pendingConnect is set after SetupVPN install so we connect without waiting for a manual click
     clickCountry(targetCountry());
   }

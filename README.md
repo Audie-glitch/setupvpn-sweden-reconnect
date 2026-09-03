@@ -36,3 +36,6 @@ Chrome does not allow auto-pin. On install/update this opens a short pin prompt;
 - **Click cooldown** — minimum time between clicks
 - **Auto-open dashboard** — open the UI tab if none is present
 - **Stop on upgrade wall** — halt when premium/upgrade text appears
+
+
+Also auto-clicks **Start connection** / **Connect** CTAs on the SetupVPN UI, then the remembered country.
