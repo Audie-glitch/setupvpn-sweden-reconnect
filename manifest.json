@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "description": "Toolbar icon opens settings popup; Open dashboard sidebar for the panel. Auto bubble Sweden on Select location.",
   "permissions": [
     "storage",
