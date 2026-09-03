@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.7.2",
-  "description": "If enabled and on Select location, bubble the country (trusted click). Waits for list load; no forced userN login.",
+  "version": "1.8.0",
+  "description": "SetupVPN dashboard side panel + auto bubble Sweden on Select location (trusted click).",
   "permissions": [
     "storage",
     "alarms",
     "tabs",
     "management",
     "scripting",
-    "debugger"
+    "debugger",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.setupvpn.com/*",
@@ -32,7 +33,8 @@
       "js": [
         "content.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [
@@ -44,5 +46,8 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
 }

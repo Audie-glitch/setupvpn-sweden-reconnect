@@ -118,3 +118,17 @@ document.getElementById("fullFlow").addEventListener("click", (e) => {
     void chrome.runtime.lastError;
   });
 });
+
+const sideBtn = document.getElementById("openSidePanel");
+if (sideBtn) {
+  sideBtn.addEventListener("click", async () => {
+    try {
+      if (chrome.sidePanel && chrome.sidePanel.open) {
+        const win = await chrome.windows.getCurrent();
+        await chrome.sidePanel.open({ windowId: win.id });
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+  });
+}

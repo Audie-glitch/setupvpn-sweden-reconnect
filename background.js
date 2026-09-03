@@ -1,3 +1,15 @@
+
+async function initSidePanel() {
+  try {
+    if (!chrome.sidePanel) return;
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+    await chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
+  } catch (err) {
+    console.warn("sidePanel init failed", err);
+  }
+}
+initSidePanel();
+
 const DASHBOARD_FALLBACK = "https://user7.setupvpn.com/ui/dashboard";
 const ALARM = "sweden-watch";
 

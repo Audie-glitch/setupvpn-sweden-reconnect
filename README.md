@@ -56,3 +56,7 @@ Selecting a country uses Chrome's debugger API for a *trusted* mouse click (Setu
 ## Active tab
 
 Bubbling a location briefly focuses the SetupVPN tab. Background tabs are throttled and trusted clicks are unreliable there; SetupVPN also asks you to keep the page open while connecting.
+
+## Dashboard sidebar
+
+Popup → **Open dashboard sidebar** opens a Chrome side panel with the SetupVPN dashboard in an iframe (uses the last known `userN` host). Keep it open to watch status; bubbling still focuses a real SetupVPN tab when a trusted click is needed.

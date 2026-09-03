@@ -99,6 +99,15 @@
     return location.pathname || "";
   }
 
+  function inNestedFrame() {
+    try {
+      return window !== window.top;
+    } catch (_err) {
+      return true;
+    }
+  }
+
+
   function href() {
     return location.href || "";
   }
