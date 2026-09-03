@@ -107,6 +107,23 @@
     ]);
   }
 
+
+  function clickOnboardingNext() {
+    // Post-install wizard: "Extension successfully installed" / "Servers across the globe" with Next
+    const t = bodyText();
+    const onWizard =
+      /extension successfully installed/i.test(t) ||
+      /servers across the globe/i.test(t) ||
+      (/\/ui\/?\?d=/i.test(location.href) && /next/i.test(t));
+    if (!onWizard) return false;
+    const clicked = clickLabeledButton([/^next$/i, /^continue$/i, /^got it$/i, /^ok$/i]);
+    if (clicked) {
+      safeSend("clicked onboarding " + clicked);
+      return true;
+    }
+    return false;
+  }
+
   function clickStartConnection() {
     const clicked = clickLabeledButton([
       /^(start connection|start connecting|connect now|connect|reconnect)$/i,
@@ -322,6 +339,10 @@
       await saveTimeRemaining(null);
 
       const now = Date.now();
+      if (now - lastClick > 1500 && clickOnboardingNext()) {
+        lastClick = now;
+        return;
+      }
       if (now - lastClick > 1500 && clickStartConnection()) {
         lastClick = now;
         return;
