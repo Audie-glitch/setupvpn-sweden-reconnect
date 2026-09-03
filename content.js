@@ -227,6 +227,15 @@
     return true;
   }
 
+
+  async function rememberDashboardHost() {
+    try {
+      const m = String(location.href || "").match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
+      if (!m) return;
+      await chrome.storage.local.set({ dashboardUrl: m[1] + "/ui/dashboard" });
+    } catch (_err) {}
+  }
+
   async function loadSettings() {
     try {
       settings = await chrome.storage.local.get(DEFAULTS);
@@ -279,6 +288,7 @@
     ticking = true;
     try {
       await loadSettings();
+      await rememberDashboardHost();
       if (!settings.enabled) return;
 
       if (acceptGuestAgreements()) return;

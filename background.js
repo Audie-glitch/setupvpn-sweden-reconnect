@@ -1,5 +1,24 @@
-const DASHBOARD = "https://user3.setupvpn.com/ui/dashboard";
+const DASHBOARD_FALLBACK = "https://user7.setupvpn.com/ui/dashboard";
 const ALARM = "sweden-watch";
+
+async function resolveDashboardUrl() {
+  const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
+  for (const tab of tabs) {
+    const m = String(tab.url || "").match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
+    if (m) return m[1] + "/ui/dashboard";
+  }
+  // Prefer last known host from storage if we saved one
+  const { dashboardUrl } = await chrome.storage.local.get({ dashboardUrl: "" });
+  if (dashboardUrl) return dashboardUrl;
+  return DASHBOARD_FALLBACK;
+}
+
+async function rememberDashboardFromTab(url) {
+  const m = String(url || "").match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
+  if (!m) return;
+  await chrome.storage.local.set({ dashboardUrl: m[1] + "/ui/dashboard" });
+}
+
 const SETUPVPN_ID = "oofgbpoabipfcfjapgnbbjjaenockbdp";
 const STORE =
   "https://chromewebstore.google.com/detail/setupvpn-lifetime-free-vpn/oofgbpoabipfcfjapgnbbjjaenockbdp";
@@ -80,7 +99,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (cfg.autoOpenDashboard) {
       const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
       if (tabs.length === 0) {
-        await chrome.tabs.create({ url: DASHBOARD, active: false });
+        await chrome.tabs.create({ url: await resolveDashboardUrl(), active: false });
         await setStatus("opened dashboard");
       }
     }
@@ -241,15 +260,17 @@ async function openDashboardAndConnect(markPending) {
   }
   const tabs = await chrome.tabs.query({ url: "https://*.setupvpn.com/ui/*" });
   if (tabs.length === 0) {
-    await chrome.tabs.create({ url: DASHBOARD, active: true });
+    const url = await resolveDashboardUrl();
+    await chrome.tabs.create({ url, active: true });
     await setStatus("opened dashboard — connecting");
     return;
   }
-  // Don't force-navigate away from /ui/guest while agreements are showing.
   const active = tabs[0];
   const url = active.url || "";
+  await rememberDashboardFromTab(url);
+  // Don't force-navigate away from /ui/guest while agreements are showing.
   if (!/\/ui\/guest/i.test(url) && !/\/ui\/dashboard/i.test(url)) {
-    await chrome.tabs.update(active.id, { url: DASHBOARD, active: true });
+    await chrome.tabs.update(active.id, { url: await resolveDashboardUrl(), active: true });
   } else {
     await chrome.tabs.update(active.id, { active: true });
   }
