@@ -39,3 +39,12 @@ Chrome does not allow auto-pin. On install/update this opens a short pin prompt;
 
 
 Also auto-clicks **Start connection** / **Connect** CTAs on the SetupVPN UI, then the remembered country.
+
+## Expected SetupVPN UI flow
+
+1. Chrome **Add extension** popup (manual once — Chrome blocks auto-confirm)
+2. `https://userN.setupvpn.com/ui/?d=...` → **Next**
+3. `.../ui/dashboard` intro → **Next**
+4. `.../ui/login` → **Connect to VPN**
+5. Agree Terms/Privacy/License + 18+ → **Continue**
+6. Selection page → click remembered/fallback country (e.g. Sweden)

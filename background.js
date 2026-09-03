@@ -268,13 +268,9 @@ async function openDashboardAndConnect(markPending) {
   const active = tabs[0];
   const url = active.url || "";
   await rememberDashboardFromTab(url);
-  // Don't force-navigate away from /ui/guest while agreements are showing.
-  if (!/\/ui\/guest/i.test(url) && !/\/ui\/dashboard/i.test(url)) {
-    await chrome.tabs.update(active.id, { url: await resolveDashboardUrl(), active: true });
-  } else {
-    await chrome.tabs.update(active.id, { active: true });
-  }
-  await setStatus("dashboard focused — connecting");
+  // Keep whatever step of the flow is already open.
+  await chrome.tabs.update(active.id, { active: true });
+  await setStatus("SetupVPN UI focused — advancing flow");
 }
 
 async function setStatus(status) {

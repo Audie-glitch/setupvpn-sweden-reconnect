@@ -14,6 +14,7 @@
     autoAgreeGuest: true,
     timeRemainingText: "",
     timeRemainingEndsAt: 0,
+    dashboardUrl: "",
   };
 
   let lastClick = 0;
@@ -26,7 +27,6 @@
 
   function bodyText() {
     try {
-      // textContent avoids layout thrash (innerText can re-enter MutationObserver)
       const root = document.body || document.documentElement;
       return root ? String(root.textContent || "") : "";
     } catch (_err) {
@@ -52,6 +52,48 @@
     } catch (_err) {
       return "";
     }
+  }
+
+  function path() {
+    return location.pathname || "";
+  }
+
+  function href() {
+    return location.href || "";
+  }
+
+  function isGuestPage() {
+    return /\/ui\/guest\/?/i.test(path());
+  }
+
+  function isLoginPage() {
+    return /\/ui\/login\/?/i.test(path());
+  }
+
+  function isOnboardingQueryPage() {
+    // https://userN.setupvpn.com/ui/?d=...
+    return /\/ui\/?$/i.test(path()) && /[?&]d=\d+/i.test(location.search || "");
+  }
+
+  function isDashboardPage() {
+    return /\/ui\/dashboard\/?/i.test(path());
+  }
+
+  function isSelectionPage() {
+    const t = bodyText();
+    return (
+      isDashboardPage() &&
+      (/select (a )?location|select a country|free servers/i.test(t) ||
+        /germany|sweden|netherlands/i.test(t))
+    );
+  }
+
+  async function rememberDashboardHost() {
+    try {
+      const m = String(href()).match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
+      if (!m) return;
+      await chrome.storage.local.set({ dashboardUrl: m[1] + "/ui/dashboard" });
+    } catch (_err) {}
   }
 
   function findCheckboxNear(textRe) {
@@ -83,67 +125,85 @@
 
   function clickLabeledButton(patterns) {
     const buttons = document.querySelectorAll(
-      "button, [role='button'], a.ant-btn, a.ant-btn-primary"
+      "button, [role='button'], a.ant-btn, a.ant-btn-primary, input[type='button'], input[type='submit']"
     );
     for (const el of buttons) {
-      const t = labelText(el);
-      if (!t || t.length > 60) continue;
+      const t = labelText(el) || el.value || "";
+      const text = String(t).replace(/\s+/g, " ").trim();
+      if (!text || text.length > 80) continue;
       for (const re of patterns) {
-        if (re.test(t)) {
+        if (re.test(text)) {
           try {
             el.click();
           } catch (_err) {}
-          return t;
+          return text;
         }
       }
     }
     return null;
   }
 
-  function clickContinue() {
-    return !!clickLabeledButton([
-      /^(continue|agree|accept|confirm|get started|next)$/i,
-      /^(start connection|start connecting|connect now|connect)$/i,
-    ]);
+  function coolClick(patterns, statusPrefix) {
+    const now = Date.now();
+    if (now - lastClick < 1500) return false;
+    const clicked = clickLabeledButton(patterns);
+    if (!clicked) return false;
+    lastClick = now;
+    safeSend((statusPrefix || "clicked") + " " + clicked);
+    return true;
   }
 
-
-  function clickOnboardingNext() {
-    // Post-install wizard: "Extension successfully installed" / "Servers across the globe" with Next
+  // Step: /ui/?d=... or dashboard onboarding overlay → Next
+  function advanceOnboarding() {
     const t = bodyText();
-    const onWizard =
+    const looksLikeWizard =
+      isOnboardingQueryPage() ||
       /extension successfully installed/i.test(t) ||
       /servers across the globe/i.test(t) ||
-      (/\/ui\/?\?d=/i.test(location.href) && /next/i.test(t));
-    if (!onWizard) return false;
-    const clicked = clickLabeledButton([/^next$/i, /^continue$/i, /^got it$/i, /^ok$/i]);
-    if (clicked) {
-      safeSend("clicked onboarding " + clicked);
-      return true;
+      (/how does it work/i.test(t) && /next/i.test(t) && !isSelectionPage());
+
+    // Dashboard can also show a Next carousel before selection is usable
+    if (isDashboardPage() && /next/i.test(t) && !/free servers/i.test(t) && !isConnected()) {
+      // allow Next on dashboard intro
+    } else if (!looksLikeWizard && !(isDashboardPage() && /next/i.test(t) && !isSelectionPage())) {
+      if (!isOnboardingQueryPage()) return false;
     }
-    return false;
+
+    return coolClick(
+      [/^next$/i, /^continue$/i, /^got it$/i, /^ok$/i, /^get started$/i],
+      "onboarding"
+    );
   }
 
-  function clickStartConnection() {
-    const clicked = clickLabeledButton([
-      /^(start connection|start connecting|connect now|connect|reconnect)$/i,
-      /start connection/i,
-    ]);
-    if (clicked) {
-      safeSend("clicked " + clicked);
-      return true;
-    }
-    return false;
+  // Step: /ui/login → Connect to VPN
+  function clickConnectToVpn() {
+    if (!isLoginPage() && !/connect to vpn/i.test(bodyText())) return false;
+    return coolClick(
+      [
+        /^connect to vpn$/i,
+        /connect to vpn/i,
+        /^connect$/i,
+        /^start connection$/i,
+        /^continue as guest$/i,
+        /^guest$/i,
+      ],
+      "login"
+    );
   }
 
-  function isGuestPage() {
-    return /\/ui\/guest\/?/i.test(location.pathname || "");
-  }
-
+  // Step: agree Terms + 18+
   function acceptGuestAgreements() {
     if (settings.autoAgreeGuest === false) return false;
-    // Only on the guest gate — dashboard footers also mention Privacy Policy.
-    if (!isGuestPage()) return false;
+    const t = bodyText();
+    const hasAgreeText =
+      /i agree to the terms and conditions/i.test(t) ||
+      (/terms and conditions/i.test(t) && /privacy policy/i.test(t) && /license agreement/i.test(t));
+    const hasAgeText =
+      /i confirm,?\s*that i am 18 years of age or older/i.test(t) ||
+      /18 years of age or older/i.test(t);
+
+    // Guest page OR any page currently showing the agreement card
+    if (!isGuestPage() && !(hasAgreeText && hasAgeText)) return false;
 
     const terms =
       findCheckboxNear(
@@ -154,20 +214,13 @@
       findCheckboxNear(/i confirm,?\s*that i am 18 years of age or older/i) ||
       findCheckboxNear(/18 years of age or older/i);
 
-    let changed = false;
-    if (terms) changed = ensureChecked(terms) || changed;
-    if (age) changed = ensureChecked(age) || changed;
+    if (terms) ensureChecked(terms);
+    if (age) ensureChecked(age);
 
-    const now = Date.now();
-    if (now - lastClick > 1500) {
-      if (clickContinue()) {
-        lastClick = now;
-        safeSend("accepted guest terms + 18+ — continuing");
-        return true;
-      }
-    }
-    if (changed) safeSend("checked guest agreements");
-    return true;
+    return coolClick(
+      [/^continue$/i, /^agree$/i, /^accept$/i, /^confirm$/i, /^next$/i],
+      "agreed"
+    );
   }
 
   function isUpgrade() {
@@ -244,15 +297,6 @@
     return true;
   }
 
-
-  async function rememberDashboardHost() {
-    try {
-      const m = String(location.href || "").match(/^(https:\/\/user\d+\.setupvpn\.com)\/ui\//i);
-      if (!m) return;
-      await chrome.storage.local.set({ dashboardUrl: m[1] + "/ui/dashboard" });
-    } catch (_err) {}
-  }
-
   async function loadSettings() {
     try {
       settings = await chrome.storage.local.get(DEFAULTS);
@@ -308,6 +352,14 @@
       await rememberDashboardHost();
       if (!settings.enabled) return;
 
+      // Full flow order:
+      // 1) /ui/?d=... Next
+      // 2) dashboard Next (intro)
+      // 3) /ui/login → Connect to VPN
+      // 4) agree Terms + 18+
+      // 5) selection page → country
+      if (advanceOnboarding()) return;
+      if (clickConnectToVpn()) return;
       if (acceptGuestAgreements()) return;
 
       if (settings.stopOnUpgrade && isUpgrade()) {
@@ -338,15 +390,8 @@
 
       await saveTimeRemaining(null);
 
-      const now = Date.now();
-      if (now - lastClick > 1500 && clickOnboardingNext()) {
-        lastClick = now;
-        return;
-      }
-      if (now - lastClick > 1500 && clickStartConnection()) {
-        lastClick = now;
-        return;
-      }
+      // Only hammer country clicks on selection/dashboard, not login/onboarding
+      if (isLoginPage() || isOnboardingQueryPage() || isGuestPage()) return;
 
       clickCountry(targetCountry());
     } catch (err) {
