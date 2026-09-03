@@ -109,7 +109,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === "status") {
@@ -133,6 +133,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "staleLink") {
     findActiveHostAndOpen(msg.url)
       .then((url) => sendResponse({ ok: true, url }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+  if (msg.type === "clickCountryInPage") {
+    const tabId = sender && sender.tab && sender.tab.id;
+    trustedClickCountry(tabId, msg.country || "Sweden")
+      .then((result) => sendResponse(result))
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
   }
@@ -332,3 +339,130 @@ async function setStatus(status) {
     color: status.startsWith("connected") ? "#1a7f37" : "#b42318",
   });
 }
+
+
+async function trustedClickCountry(tabId, country) {
+  if (!tabId) return { ok: false, error: "no tab" };
+
+  // 1) MAIN-world: locate row + coords
+  const [{ result: loc } = {}] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [country],
+    func: (countryName) => {
+      const exact = new RegExp("^" + countryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i");
+      const items = Array.from(
+        document.querySelectorAll("li.ant-list-item.list-item, li.ant-list-item, li.list-item")
+      );
+      let li = null;
+      for (const item of items) {
+        const title = item.querySelector("h4.ant-list-item-meta-title, .ant-list-item-meta-title");
+        const text = (title && (title.textContent || "") || "").replace(/\s+/g, " ").trim();
+        const img = item.querySelector('img[src*="flags/se.png"], img[src*="/se.png"]');
+        if ((text && exact.test(text)) || (countryName.toLowerCase() === "sweden" && img)) {
+          li = item;
+          break;
+        }
+      }
+      if (!li) return { ok: false, error: "row not found", count: items.length };
+      try {
+        li.scrollIntoView({ block: "center", inline: "nearest" });
+      } catch (_err) {}
+      const r = li.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return { ok: false, error: "row not visible" };
+      const x = Math.floor(r.left + r.width / 2);
+      const y = Math.floor(r.top + r.height / 2);
+      return {
+        ok: true,
+        x,
+        y,
+        width: r.width,
+        height: r.height,
+        title: (li.querySelector(".ant-list-item-meta-title") || {}).textContent || "",
+      };
+    },
+  });
+
+  if (!loc || !loc.ok) return loc || { ok: false, error: "locate failed" };
+
+  // 2) Trusted mouse via debugger (isTrusted: true) — SetupVPN ignores synthetic clicks
+  const target = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(target, "1.3");
+    attached = true;
+    const opts = { button: "left", buttons: 1, pointerType: "mouse", x: loc.x, y: loc.y };
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      ...opts,
+      buttons: 0,
+    });
+    await new Promise((r) => setTimeout(r, 120));
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      clickCount: 1,
+      ...opts,
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      clickCount: 1,
+      button: "left",
+      buttons: 0,
+      pointerType: "mouse",
+      x: loc.x,
+      y: loc.y,
+    });
+    await setStatus("trusted click " + country + " @ " + loc.x + "," + loc.y);
+    return { ok: true, via: "debugger", ...loc };
+  } catch (err) {
+    // 3) Fallback: MAIN-world click (may still fail if isTrusted required)
+    try {
+      const [{ result } = {}] = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: "MAIN",
+        args: [loc.x, loc.y],
+        func: (x, y) => {
+          const el = document.elementFromPoint(x, y);
+          if (!el) return { ok: false, error: "elementFromPoint miss" };
+          const li = el.closest("li.ant-list-item, li") || el;
+          for (const type of [
+            "pointerover",
+            "mouseover",
+            "mousemove",
+            "pointerdown",
+            "mousedown",
+            "pointerup",
+            "mouseup",
+            "click",
+          ]) {
+            el.dispatchEvent(
+              new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                clientX: x,
+                clientY: y,
+                button: 0,
+                buttons: type.includes("down") ? 1 : 0,
+              })
+            );
+          }
+          try {
+            li.click();
+          } catch (_err) {}
+          return { ok: true, via: "main", tag: el.tagName };
+        },
+      });
+      return Object.assign({ locate: loc }, result || { ok: false });
+    } catch (err2) {
+      return { ok: false, error: String(err), fallback: String(err2) };
+    }
+  } finally {
+    if (attached) {
+      try {
+        await chrome.debugger.detach(target);
+      } catch (_err) {}
+    }
+  }
+}
+

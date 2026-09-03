@@ -611,11 +611,13 @@
     return null;
   }
 
+  let countryClickInFlight = false;
+
   function clickCountry(country) {
     const now = Date.now();
     const reconnecting = !!settings.pendingConnect || !isConnected();
     const cooldownMs = reconnecting
-      ? 1000
+      ? 1500
       : Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
     if (!locationsReady()) {
@@ -628,25 +630,45 @@
       return false;
     }
     lastClick = now;
+    if (countryClickInFlight) return true;
+    countryClickInFlight = true;
+    safeSend("clicking " + country + " (trusted)");
 
-    const meta =
-      el.querySelector(".ant-list-item-meta, .ant-list-item-meta-content, h4.ant-list-item-meta-title") ||
-      el;
-    forceHover(meta);
-    forceHover(el);
-    pointClick(el);
-    reactClick(el);
-    if (meta !== el) {
-      pointClick(meta);
-      reactClick(meta);
-    }
-
-    safeSend("clicked " + country);
-    if (settings.pendingConnect) {
-      settings.pendingConnect = false;
-      try {
-        chrome.storage.local.set({ pendingConnect: false });
-      } catch (_err) {}
+    try {
+      chrome.runtime.sendMessage(
+        { type: "clickCountryInPage", country: country },
+        (res) => {
+          countryClickInFlight = false;
+          const err = chrome.runtime.lastError;
+          if (err) {
+            safeSend("click failed: " + err.message);
+            // local fallback
+            forceHover(el);
+            pointClick(el);
+            reactClick(el);
+            return;
+          }
+          if (res && res.ok) {
+            safeSend("clicked " + country + (res.via ? " via " + res.via : ""));
+            if (settings.pendingConnect) {
+              settings.pendingConnect = false;
+              try {
+                chrome.storage.local.set({ pendingConnect: false });
+              } catch (_err) {}
+            }
+          } else {
+            safeSend("click failed: " + ((res && res.error) || "unknown"));
+            forceHover(el);
+            pointClick(el);
+            reactClick(el);
+          }
+        }
+      );
+    } catch (_err) {
+      countryClickInFlight = false;
+      forceHover(el);
+      pointClick(el);
+      reactClick(el);
     }
     return true;
   }

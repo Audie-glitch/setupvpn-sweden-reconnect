@@ -48,3 +48,7 @@ Also auto-clicks **Start connection** / **Connect** CTAs on the SetupVPN UI, the
 4. `.../ui/login` → **Connect to VPN**
 5. Agree Terms/Privacy/License + 18+ → **Continue**
 6. Selection page → click remembered/fallback country (e.g. Sweden)
+
+## Note on country click
+
+Selecting a country uses Chrome's debugger API for a *trusted* mouse click (SetupVPN ignores synthetic clicks). Chrome may show a short "Extension started debugging this browser" banner — that is expected.
