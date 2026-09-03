@@ -49,3 +49,10 @@ for (const id of FIELDS) {
 
 chrome.storage.onChanged.addListener(render);
 render();
+
+document.getElementById("webstore").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({
+    url: "https://chromewebstore.google.com/detail/setupvpn-lifetime-free-vpn/oofgbpoabipfcfjapgnbbjjaenockbdp",
+  });
+});
