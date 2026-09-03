@@ -4,6 +4,13 @@ Companion Chrome extension. When the SetupVPN dashboard drops back to the countr
 
 It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the page says you need to upgrade and that option is enabled, this helper stops.
 
+## Install → agree → connect
+
+On install of this helper (or via the popup action):
+1. Opens the SetupVPN Web Store page and clicks **Add to Chrome** when it can
+2. You click Chrome’s **Add extension** confirm (required by Chrome; cannot be automated by an extension)
+3. On SetupVPN install/enable, opens the dashboard and connects to the remembered/fallback country
+
 ## SetupVPN required
 
 If SetupVPN (`oofgbpoabipfcfjapgnbbjjaenockbdp`) is missing or disabled, this helper opens an install prompt with the Chrome Web Store link.

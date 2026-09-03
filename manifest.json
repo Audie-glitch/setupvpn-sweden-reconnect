@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.4.0",
-  "description": "Remember SetupVPN location and re-click it on disconnect. Prompts if SetupVPN is missing.",
+  "version": "1.5.0",
+  "description": "On install: open SetupVPN Web Store, help Add to Chrome, then auto-connect after you confirm.",
   "permissions": [
     "storage",
     "alarms",
@@ -26,6 +26,16 @@
       ],
       "js": [
         "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chromewebstore.google.com/*",
+        "https://chrome.google.com/webstore/*"
+      ],
+      "js": [
+        "webstore.js"
       ],
       "run_at": "document_idle"
     }

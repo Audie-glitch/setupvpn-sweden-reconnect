@@ -10,6 +10,7 @@
     stopOnUpgrade: true,
     rememberLastLocation: true,
     lastConnectedCountry: "",
+    pendingConnect: false,
     timeRemainingText: "",
     timeRemainingEndsAt: 0,
   };
@@ -156,6 +157,10 @@
       const detected = detectConnectedCountry();
       if (detected) await rememberCountry(detected);
       await saveTimeRemaining(detectTimeRemaining());
+      if (settings.pendingConnect) {
+        settings.pendingConnect = false;
+        await chrome.storage.local.set({ pendingConnect: false });
+      }
       const shown = detected || settings.lastConnectedCountry || settings.country || "VPN";
       const rem = settings.timeRemainingText ? ` · ${settings.timeRemainingText} left` : "";
       chrome.runtime.sendMessage({
@@ -166,6 +171,7 @@
     }
 
     await saveTimeRemaining(null);
+    // pendingConnect is set after SetupVPN install so we connect without waiting for a manual click
     clickCountry(targetCountry());
   }
 

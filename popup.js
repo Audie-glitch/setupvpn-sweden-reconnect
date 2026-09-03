@@ -104,3 +104,8 @@ document.getElementById("installSetupvpn").addEventListener("click", (e) => {
     }
   });
 });
+
+document.getElementById("fullFlow").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.runtime.sendMessage({ type: "startFullFlow" });
+});
