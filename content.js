@@ -125,12 +125,12 @@
       if (now - lastClick > 1500) {
         if (clickContinue()) {
           lastClick = now;
-          safeSend("accepted guest terms + 18+ — continuing",);
+          safeSend("accepted guest terms + 18+ — continuing");
           return true;
         }
       }
       if (changed) {
-        safeSend("checked guest agreements",);
+        safeSend("checked guest agreements");
       }
       return true; // still on guest gate
     }
@@ -197,18 +197,12 @@
     if (now - lastClick < cooldownMs) return false;
     const el = findCountry(country);
     if (!el) {
-      chrome.runtime.sendMessage({
-        type: "status",
-        status: `looking for ${country}`,
-      });
+      safeSend(`looking for ${country}`);
       return false;
     }
     lastClick = now;
     el.click();
-    chrome.runtime.sendMessage({
-      type: "status",
-      status: `clicked ${country}`,
-    });
+    safeSend(`clicked ${country}`);
     return true;
   }
 
@@ -274,10 +268,7 @@
       }
       const shown = detected || settings.lastConnectedCountry || settings.country || "VPN";
       const rem = settings.timeRemainingText ? ` · ${settings.timeRemainingText} left` : "";
-      chrome.runtime.sendMessage({
-        type: "status",
-        status: `connected to ${shown}${rem}`,
-      });
+      safeSend(`connected to ${shown}${rem}`);
       return;
     }
 
