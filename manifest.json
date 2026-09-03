@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.8.0",
-  "description": "SetupVPN dashboard side panel + auto bubble Sweden on Select location (trusted click).",
+  "version": "1.8.1",
+  "description": "Auto-opens SetupVPN dashboard side panel when SetupVPN is installed; bubbles Sweden on Select location.",
   "permissions": [
     "storage",
     "alarms",

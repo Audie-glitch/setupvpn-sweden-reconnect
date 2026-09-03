@@ -10,6 +10,23 @@ async function initSidePanel() {
 }
 initSidePanel();
 
+function watchPendingSidebar() {
+  chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area !== "local" || !changes.pendingSidebarOpen) return;
+    if (!changes.pendingSidebarOpen.newValue) {
+      try {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      } catch (_err) {}
+      return;
+    }
+    try {
+      // Next toolbar click opens the side panel (valid user gesture path)
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    } catch (_err) {}
+  });
+}
+watchPendingSidebar();
+
 const DASHBOARD_FALLBACK = "https://user7.setupvpn.com/ui/dashboard";
 const ALARM = "sweden-watch";
 
@@ -51,6 +68,7 @@ const DEFAULTS = {
   pendingConnect: false,
   autoAgreeGuest: true,
   autoClickAddToChrome: false,
+  autoOpenSidebar: true,
   lastInstallPromptAt: 0,
   lastStatus: "installed",
   lastAt: Date.now(),
@@ -90,8 +108,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       return;
     }
 
-    // Already present: after reload, reconnect.
+    // Already present: after reload, reconnect + sidebar.
     await chrome.storage.local.set({ pendingConnect: true });
+    await openDashboardSidebar("SetupVPN already installed");
     await openDashboardAndConnect(true);
   } catch (err) {
     console.error("onInstalled failed", err);
@@ -182,6 +201,7 @@ function watchManagement() {
       setupvpnEnabled: true,
       pendingConnect: true,
     });
+    await openDashboardSidebar("SetupVPN installed");
     await openDashboardAndConnect(true);
   });
   chrome.management.onUninstalled.addListener(async (id) => {
@@ -200,6 +220,7 @@ function watchManagement() {
       setupvpnEnabled: true,
       pendingConnect: true,
     });
+    await openDashboardSidebar("SetupVPN enabled");
     await openDashboardAndConnect(true);
   });
   chrome.management.onDisabled.addListener(async (info) => {
@@ -256,6 +277,7 @@ async function startInstallAndConnectFlow(forcePrompt) {
   const state = await refreshSetupVpnState();
   if (state.setupvpnInstalled && state.setupvpnEnabled) {
     await chrome.storage.local.set({ pendingConnect: true });
+    await openDashboardSidebar("SetupVPN detected");
     await openDashboardAndConnect(true);
     return state;
   }
@@ -349,6 +371,30 @@ async function openDashboardAndConnect(markPending) {
 
   // No tab yet: wait for SetupVPN auto-open / toolbar icon. Do NOT create user2 login.
   await setStatus("waiting for SetupVPN to open its tab (click its icon if needed)");
+}
+
+
+async function openDashboardSidebar(reason) {
+  const { autoOpenSidebar } = await chrome.storage.local.get({ autoOpenSidebar: true });
+  if (autoOpenSidebar === false) return false;
+  if (!chrome.sidePanel || !chrome.sidePanel.open) return false;
+  try {
+    await chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
+    const win = await chrome.windows.getLastFocused({ populate: false });
+    if (win && win.id != null) {
+      await chrome.sidePanel.open({ windowId: win.id });
+      await setStatus(
+        reason ? "sidebar opened — " + reason : "opened SetupVPN dashboard sidebar"
+      );
+      return true;
+    }
+  } catch (err) {
+    // Chrome often requires a user gesture for sidePanel.open
+    console.warn("sidePanel.open failed", err);
+    await setStatus("SetupVPN installed — click extension icon → Open dashboard sidebar");
+    await chrome.storage.local.set({ pendingSidebarOpen: true });
+  }
+  return false;
 }
 
 async function setStatus(status) {

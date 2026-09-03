@@ -7,6 +7,7 @@ const DEFAULTS = {
   stopOnUpgrade: true,
   autoAgreeGuest: true,
   autoClickAddToChrome: false,
+  autoOpenSidebar: true,
   rememberLastLocation: true,
   lastConnectedCountry: "",
   setupvpnInstalled: false,
@@ -27,6 +28,7 @@ const FIELDS = [
   "rememberLastLocation",
   "autoAgreeGuest",
   "autoClickAddToChrome",
+  "autoOpenSidebar",
 ];
 
 function formatRemaining(endsAt) {
@@ -50,6 +52,7 @@ async function render() {
   document.getElementById("stopOnUpgrade").checked = !!cfg.stopOnUpgrade;
   document.getElementById("autoAgreeGuest").checked = cfg.autoAgreeGuest !== false;
   document.getElementById("autoClickAddToChrome").checked = !!cfg.autoClickAddToChrome;
+  document.getElementById("autoOpenSidebar").checked = cfg.autoOpenSidebar !== false;
   const sv = document.getElementById("setupvpnStatus");
   if (!cfg.setupvpnInstalled) sv.textContent = "SetupVPN: not installed";
   else if (!cfg.setupvpnEnabled) sv.textContent = "SetupVPN: installed but disabled";
@@ -87,6 +90,23 @@ for (const id of FIELDS) {
 chrome.storage.onChanged.addListener(render);
 setInterval(render, 1000);
 render();
+
+(async function maybeOpenSidebarFromPopup() {
+  try {
+    const { pendingSidebarOpen, autoOpenSidebar } = await chrome.storage.local.get({
+      pendingSidebarOpen: false,
+      autoOpenSidebar: true,
+    });
+    if (!pendingSidebarOpen || autoOpenSidebar === false) return;
+    if (!chrome.sidePanel || !chrome.sidePanel.open) return;
+    const win = await chrome.windows.getCurrent();
+    await chrome.sidePanel.open({ windowId: win.id });
+    await chrome.storage.local.set({ pendingSidebarOpen: false });
+    try {
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+    } catch (_err) {}
+  } catch (_err) {}
+})();
 
 document.getElementById("webstore").addEventListener("click", (e) => {
   e.preventDefault();
