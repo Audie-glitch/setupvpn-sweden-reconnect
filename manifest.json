@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Reload this helper to auto-start SetupVPN install (Web Store) then connect after you confirm Add extension.",
   "permissions": [
     "storage",
     "alarms",
     "tabs",
-    "management"
+    "management",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.setupvpn.com/*",

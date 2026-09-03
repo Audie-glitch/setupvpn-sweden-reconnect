@@ -179,6 +179,19 @@ async function startInstallAndConnectFlow(forcePrompt) {
   return state;
 }
 
+
+async function injectWebstoreClicker(tabId) {
+  if (!chrome.scripting || !chrome.scripting.executeScript) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["webstore.js"],
+    });
+  } catch (err) {
+    console.warn("webstore inject failed", err);
+  }
+}
+
 async function maybeOpenStore(forcePrompt) {
   const { lastInstallPromptAt } = await chrome.storage.local.get({
     lastInstallPromptAt: 0,
@@ -192,15 +205,34 @@ async function maybeOpenStore(forcePrompt) {
       "https://chrome.google.com/webstore/*",
     ],
   });
+  let tabId;
   if (existing.length) {
     const tab =
       existing.find((t) => (t.url || "").includes(SETUPVPN_ID)) || existing[0];
     await chrome.tabs.update(tab.id, { url: STORE, active: true });
+    tabId = tab.id;
   } else {
-    await chrome.tabs.create({ url: STORE, active: true });
+    const tab = await chrome.tabs.create({ url: STORE, active: true });
+    tabId = tab.id;
   }
   await chrome.storage.local.set({ lastInstallPromptAt: Date.now() });
   await setStatus("SetupVPN missing — open Web Store, then click Add extension");
+
+  // Content scripts can miss the new Web Store shadow DOM; also inject on load.
+  const onUpdated = async (id, info) => {
+    if (id !== tabId || info.status !== "complete") return;
+    chrome.tabs.onUpdated.removeListener(onUpdated);
+    await injectWebstoreClicker(tabId);
+  };
+  chrome.tabs.onUpdated.addListener(onUpdated);
+  // If already complete
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === "complete") {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      await injectWebstoreClicker(tabId);
+    }
+  } catch (_err) {}
 }
 
 async function openDashboardAndConnect(markPending) {
