@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "If enabled and on Select location, bubble the country (trusted click). Waits for list load; no forced userN login.",
   "permissions": [
     "storage",

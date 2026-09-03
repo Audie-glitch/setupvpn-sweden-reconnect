@@ -52,3 +52,7 @@ Also auto-clicks **Start connection** / **Connect** CTAs on the SetupVPN UI, the
 ## Note on country click
 
 Selecting a country uses Chrome's debugger API for a *trusted* mouse click (SetupVPN ignores synthetic clicks). Chrome may show a short "Extension started debugging this browser" banner — that is expected.
+
+## Active tab
+
+Bubbling a location briefly focuses the SetupVPN tab. Background tabs are throttled and trusted clicks are unreliable there; SetupVPN also asks you to keep the page open while connecting.

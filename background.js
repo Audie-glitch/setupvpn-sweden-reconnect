@@ -359,6 +359,15 @@ async function setStatus(status) {
 async function trustedClickCountry(tabId, country) {
   if (!tabId) return { ok: false, error: "no tab" };
 
+  // Country click needs a visible tab (debugger coords + SetupVPN keep-open).
+  try {
+    await chrome.tabs.update(tabId, { active: true });
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.windowId != null) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+  } catch (_err) {}
+
   // 1) MAIN-world: locate row + coords
   const [{ result: loc } = {}] = await chrome.scripting.executeScript({
     target: { tabId },

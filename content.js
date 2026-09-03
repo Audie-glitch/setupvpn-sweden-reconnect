@@ -660,7 +660,7 @@
     setTimeout(() => {
       countryClickInFlight = false;
     }, 5000);
-    safeSend("select location — bubbling " + country);
+    safeSend("select location — focusing tab, bubbling " + country);
 
     try {
       chrome.runtime.sendMessage(
