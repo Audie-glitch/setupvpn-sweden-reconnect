@@ -8,7 +8,7 @@ It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the 
 
 On install **or Reload** of this helper (or via the popup action), if SetupVPN is missing:
 1. Opens the SetupVPN Web Store page and **waits** for you to click **Add to Chrome** and Accept the Chrome popup
-2. When SetupVPN appears, advances **Next → Connect to VPN → agree → country** automatically
+2. Does **not** invent `userN` URLs — waits for SetupVPN to open its active link (toolbar icon / auto-open). When that tab appears, advances **Next → Connect to VPN → agree → country** automatically
 3. (Optional) popup toggle can re-enable auto-clicking Add to Chrome
 
 ## SetupVPN required
