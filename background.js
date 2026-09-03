@@ -18,6 +18,7 @@ const DEFAULTS = {
   setupvpnInstalled: false,
   setupvpnEnabled: false,
   pendingConnect: false,
+  autoAgreeGuest: true,
   lastInstallPromptAt: 0,
   lastStatus: "installed",
   lastAt: Date.now(),
@@ -47,6 +48,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     enabled: true,
     autoOpenDashboard: true,
     pendingConnect: false,
+  autoAgreeGuest: true,
   });
   if (!cfg.enabled) return;
 
@@ -92,6 +94,7 @@ chrome.management.onUninstalled.addListener(async (id) => {
     setupvpnInstalled: false,
     setupvpnEnabled: false,
     pendingConnect: false,
+  autoAgreeGuest: true,
   });
   await startInstallAndConnectFlow(true);
 });

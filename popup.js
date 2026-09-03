@@ -5,6 +5,7 @@ const DEFAULTS = {
   cooldownSeconds: 20,
   autoOpenDashboard: true,
   stopOnUpgrade: true,
+  autoAgreeGuest: true,
   rememberLastLocation: true,
   lastConnectedCountry: "",
   setupvpnInstalled: false,
@@ -44,6 +45,7 @@ async function render() {
   document.getElementById("cooldownSeconds").value = Number(cfg.cooldownSeconds) || 20;
   document.getElementById("autoOpenDashboard").checked = !!cfg.autoOpenDashboard;
   document.getElementById("stopOnUpgrade").checked = !!cfg.stopOnUpgrade;
+  document.getElementById("autoAgreeGuest").checked = cfg.autoAgreeGuest !== false;
   const sv = document.getElementById("setupvpnStatus");
   if (!cfg.setupvpnInstalled) sv.textContent = "SetupVPN: not installed";
   else if (!cfg.setupvpnEnabled) sv.textContent = "SetupVPN: installed but disabled";

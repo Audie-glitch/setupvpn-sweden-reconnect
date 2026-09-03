@@ -11,6 +11,7 @@
     rememberLastLocation: true,
     lastConnectedCountry: "",
     pendingConnect: false,
+    autoAgreeGuest: true,
     timeRemainingText: "",
     timeRemainingEndsAt: 0,
   };
@@ -28,6 +29,108 @@
   function escapeRegExp(s) {
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
+
+
+  function labelText(el) {
+    return (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function findCheckboxNear(textRe) {
+    const labels = [...document.querySelectorAll("label, .ant-checkbox-wrapper, span, div")];
+    for (const node of labels) {
+      const t = labelText(node);
+      if (!textRe.test(t) || t.length > 180) continue;
+      const input =
+        node.querySelector('input[type="checkbox"]') ||
+        (node.htmlFor && document.getElementById(node.htmlFor)) ||
+        node.closest("label")?.querySelector('input[type="checkbox"]');
+      if (input) return input;
+      const prior = node.previousElementSibling?.querySelector?.('input[type="checkbox"]');
+      if (prior) return prior;
+      const parentBox = node.closest(".ant-checkbox-wrapper, label");
+      const nested = parentBox && parentBox.querySelector('input[type="checkbox"]');
+      if (nested) return nested;
+    }
+    // Ant Design: clickable span.ant-checkbox
+    for (const wrap of document.querySelectorAll(".ant-checkbox-wrapper")) {
+      if (textRe.test(labelText(wrap))) {
+        const input = wrap.querySelector('input[type="checkbox"]');
+        if (input) return input;
+      }
+    }
+    return null;
+  }
+
+  function ensureChecked(input) {
+    if (!input) return false;
+    if (input.checked) return true;
+    input.click();
+    if (!input.checked) {
+      input.checked = true;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    return !!input.checked;
+  }
+
+  function clickContinue() {
+    const buttons = [...document.querySelectorAll("button, [role='button'], a.ant-btn")];
+    for (const el of buttons) {
+      const t = labelText(el);
+      if (/^(continue|agree|accept|confirm|get started|next)$/i.test(t)) {
+        el.click();
+        return true;
+      }
+      if (/continue|agree|accept|i am 18/i.test(t) && t.length < 40) {
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function acceptGuestAgreements() {
+    if (settings.autoAgreeGuest === false) return false;
+    const t = bodyText();
+    const needsTerms = /terms and conditions|privacy policy|license agreement/i.test(t);
+    const needsAge = /18 years of age|18 years|i am 18/i.test(t);
+    if (!needsTerms && !needsAge && !/\/ui\/guest/i.test(location.pathname)) return false;
+
+    const terms = findCheckboxNear(
+      /i agree to the terms and conditions,\s*privacy policy,\s*license agreement/i
+    ) || findCheckboxNear(/terms and conditions.*privacy policy.*license agreement/i);
+    const age = findCheckboxNear(
+      /i confirm,?\s*that i am 18 years of age or older/i
+    ) || findCheckboxNear(/18 years of age or older/i);
+
+    let changed = false;
+    if (terms) changed = ensureChecked(terms) || changed;
+    if (age) changed = ensureChecked(age) || changed;
+
+    // If checkboxes were found/handled, try continue
+    if (terms || age || needsTerms || needsAge) {
+      const now = Date.now();
+      if (now - lastClick > 1500) {
+        if (clickContinue()) {
+          lastClick = now;
+          chrome.runtime.sendMessage({
+            type: "status",
+            status: "accepted guest terms + 18+ — continuing",
+          });
+          return true;
+        }
+      }
+      if (changed) {
+        chrome.runtime.sendMessage({
+          type: "status",
+          status: "checked guest agreements",
+        });
+      }
+      return true; // still on guest gate
+    }
+    return false;
+  }
+
 
   function isUpgrade() {
     return UPGRADE.test(bodyText());
@@ -145,6 +248,8 @@
     if (!watching) return;
     await loadSettings();
     if (!settings.enabled) return;
+
+    if (acceptGuestAgreements()) return;
 
     if (settings.stopOnUpgrade && isUpgrade()) {
       watching = false;
