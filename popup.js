@@ -81,3 +81,8 @@ document.getElementById("webstore").addEventListener("click", (e) => {
     url: "https://chromewebstore.google.com/detail/setupvpn-lifetime-free-vpn/oofgbpoabipfcfjapgnbbjjaenockbdp",
   });
 });
+
+document.getElementById("pinHelp").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+});

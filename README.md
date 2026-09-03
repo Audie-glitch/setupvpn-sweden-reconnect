@@ -4,6 +4,10 @@ Companion Chrome extension. When the SetupVPN dashboard drops back to the countr
 
 It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the page says you need to upgrade and that option is enabled, this helper stops.
 
+## Pin
+
+Chrome does not allow auto-pin. On install/update this opens a short pin prompt; you can also open it from the popup.
+
 ## Load / reload
 
 1. Open `chrome://extensions`

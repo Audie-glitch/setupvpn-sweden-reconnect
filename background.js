@@ -16,10 +16,14 @@ const DEFAULTS = {
   lastAt: Date.now(),
 };
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   const current = await chrome.storage.local.get(null);
   await chrome.storage.local.set({ ...DEFAULTS, ...current, lastAt: Date.now() });
   chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
+  if (details.reason === "install" || details.reason === "update") {
+    // Chrome forbids auto-pin. Open a short pin prompt instead.
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {
