@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SetupVPN Sweden Reconnector",
-  "version": "1.0.0",
-  "description": "When SetupVPN drops, re-click Sweden on the dashboard. Stops on upgrade walls. Does not modify SetupVPN.",
+  "version": "1.1.0",
+  "description": "When SetupVPN drops, re-click a chosen free country on the dashboard. Stops on upgrade walls.",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": ["https://*.setupvpn.com/*"],
   "background": {
@@ -10,7 +10,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Sweden reconnector"
+    "default_title": "SetupVPN reconnector"
   },
   "content_scripts": [
     {

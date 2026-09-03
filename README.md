@@ -1,20 +1,21 @@
 # SetupVPN Sweden Reconnector
 
-Companion Chrome extension. When the SetupVPN dashboard drops back to the country list, it clicks **Sweden** again — the same action that connected Guest mode.
+Companion Chrome extension. When the SetupVPN dashboard drops back to the country list, it clicks your chosen free country again.
 
-It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the page says you need to upgrade, this helper stops.
+It does **not** modify SetupVPN, spoof premium, or skip an upgrade wall. If the page says you need to upgrade and that option is enabled, this helper stops.
 
-## Load it
+## Load / reload
 
 1. Open `chrome://extensions`
 2. Enable Developer mode
-3. Load unpacked → select this folder:
-   `/workspace/setupvpn-sweden-reconnect`
-4. Keep `https://user3.setupvpn.com/ui/dashboard` open (or let the helper open it)
+3. Load unpacked → `/workspace/setupvpn-sweden-reconnect` (or clone this repo)
+4. After updates, hit **Reload** on the extension card
 
-## Behavior
+## Popup settings
 
-- Checks the dashboard every few seconds
-- If it sees “Connected to Sweden”, it waits
-- If it sees the free-server list, it clicks Sweden (20s cooldown)
-- If it sees upgrade / premium-required text, it stops and badges `!`
+- **Enabled** — turn the helper on/off
+- **Country** — Sweden, Germany, United States, Netherlands, United Kingdom, Poland
+- **Check every** — how often to look at the dashboard
+- **Click cooldown** — minimum time between clicks
+- **Auto-open dashboard** — open the UI tab if none is present
+- **Stop on upgrade wall** — halt when premium/upgrade text appears

@@ -3,21 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; width: 260px; }
-    h1 { font-size: 14px; margin: 0 0 8px; }
-    p { margin: 6px 0; color: #333; }
-    label { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
-    .status { background: #f4f4f4; padding: 8px; border-radius: 6px; word-break: break-word; }
+    body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; width: 300px; color: #111; }
+    h1 { font-size: 14px; margin: 0 0 10px; }
+    .row { margin: 8px 0; }
+    label.block { display: block; margin-bottom: 4px; font-weight: 600; }
+    label.check { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+    select, input[type="number"] {
+      width: 100%; box-sizing: border-box; padding: 6px 8px;
+      border: 1px solid #ccc; border-radius: 6px; font: inherit;
+    }
+    .status { background: #f4f4f4; padding: 8px; border-radius: 6px; word-break: break-word; margin-top: 10px; }
+    .hint { color: #555; font-size: 12px; margin: 8px 0 0; }
   </style>
 </head>
 <body>
-  <h1>Sweden reconnector</h1>
-  <label>
-    <input id="enabled" type="checkbox" />
-    Re-click Sweden when disconnected
-  </label>
+  <h1>SetupVPN reconnector</h1>
+
+  <div class="row">
+    <label class="check"><input id="enabled" type="checkbox" /> Enabled</label>
+  </div>
+
+  <div class="row">
+    <label class="block" for="country">Country</label>
+    <select id="country">
+      <option>Sweden</option>
+      <option>Germany</option>
+      <option>United States</option>
+      <option>Netherlands</option>
+      <option>United Kingdom</option>
+      <option>Poland</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label class="block" for="checkSeconds">Check every (seconds)</label>
+    <input id="checkSeconds" type="number" min="2" max="120" step="1" />
+  </div>
+
+  <div class="row">
+    <label class="block" for="cooldownSeconds">Click cooldown (seconds)</label>
+    <input id="cooldownSeconds" type="number" min="5" max="300" step="1" />
+  </div>
+
+  <div class="row">
+    <label class="check"><input id="autoOpenDashboard" type="checkbox" /> Auto-open dashboard if missing</label>
+  </div>
+
+  <div class="row">
+    <label class="check"><input id="stopOnUpgrade" type="checkbox" /> Stop on upgrade wall</label>
+  </div>
+
   <p class="status" id="status">…</p>
-  <p>Stops if SetupVPN shows an upgrade wall. Does not change SetupVPN itself.</p>
+  <p class="hint">Reload the extension on <code>chrome://extensions</code> after updating. Keep the SetupVPN dashboard tab open.</p>
   <script src="popup.js"></script>
 </body>
 </html>
