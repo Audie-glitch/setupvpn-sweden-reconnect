@@ -11,15 +11,18 @@
       color: #e8eaed;
       font: 12px/1.4 system-ui, sans-serif;
     }
+    #chrome {
+      border-bottom: 1px solid #2a2f3a;
+      background: #161a22;
+      padding: 8px 10px;
+    }
     #bar {
       display: flex;
       gap: 8px;
       align-items: center;
-      padding: 8px 10px;
-      border-bottom: 1px solid #2a2f3a;
-      background: #161a22;
+      flex-wrap: wrap;
     }
-    #bar button {
+    button {
       border: 0;
       border-radius: 6px;
       padding: 6px 10px;
@@ -28,26 +31,62 @@
       cursor: pointer;
       font-weight: 600;
     }
-    #bar button.secondary { background: #2a2f3a; }
-    #status { flex: 1; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    button.secondary { background: #2a2f3a; }
+    #status { flex: 1; min-width: 120px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #settings {
+      margin-top: 8px;
+      display: grid;
+      gap: 6px;
+    }
+    #settings.collapsed { display: none; }
+    label.check { display: flex; gap: 8px; align-items: center; }
+    label.block { display: block; font-weight: 600; margin-bottom: 2px; }
+    select, input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #2a2f3a;
+      background: #0f1115;
+      color: #e8eaed;
+    }
     #frame {
       border: 0;
       width: 100%;
-      height: calc(100% - 42px);
+      height: calc(100% - var(--chrome-h, 48px));
       background: #fff;
     }
-    #empty {
-      padding: 16px;
-      display: none;
-    }
+    #empty { padding: 16px; display: none; }
     #empty.show { display: block; }
+    .meta { opacity: 0.8; }
   </style>
 </head>
 <body>
-  <div id="bar">
-    <button id="reload" type="button">Reload</button>
-    <button id="focusTab" class="secondary" type="button">Open tab</button>
-    <span id="status">Loading…</span>
+  <div id="chrome">
+    <div id="bar">
+      <button id="reload" type="button">Reload</button>
+      <button id="focusTab" class="secondary" type="button">Open tab</button>
+      <button id="toggleSettings" class="secondary" type="button">Settings</button>
+      <span id="status">Loading…</span>
+    </div>
+    <div id="settings" class="collapsed">
+      <label class="check"><input id="enabled" type="checkbox" /> Enabled (auto bubble location)</label>
+      <label class="check"><input id="autoOpenSidebar" type="checkbox" /> Auto-open sidebar when SetupVPN installed</label>
+      <label class="check"><input id="rememberLastLocation" type="checkbox" /> Remember last location</label>
+      <div>
+        <label class="block" for="country">Fallback country</label>
+        <select id="country">
+          <option>Sweden</option>
+          <option>Germany</option>
+          <option>United States</option>
+          <option>Netherlands</option>
+          <option>United Kingdom</option>
+          <option>Poland</option>
+        </select>
+      </div>
+      <p class="meta" id="countdown">Time remaining: —</p>
+      <p class="meta">Toolbar icon opens <strong>settings popup</strong>. Use this panel for the dashboard.</p>
+    </div>
   </div>
   <div id="empty">No SetupVPN host yet. Open SetupVPN (toolbar icon) once, then hit Reload.</div>
   <iframe id="frame" title="SetupVPN dashboard" allow="clipboard-read; clipboard-write"></iframe>

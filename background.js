@@ -2,6 +2,7 @@
 async function initSidePanel() {
   try {
     if (!chrome.sidePanel) return;
+    // Keep default_popup for settings — never steal the toolbar click for the side panel.
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
     await chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
   } catch (err) {
@@ -9,23 +10,6 @@ async function initSidePanel() {
   }
 }
 initSidePanel();
-
-function watchPendingSidebar() {
-  chrome.storage.onChanged.addListener(async (changes, area) => {
-    if (area !== "local" || !changes.pendingSidebarOpen) return;
-    if (!changes.pendingSidebarOpen.newValue) {
-      try {
-        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
-      } catch (_err) {}
-      return;
-    }
-    try {
-      // Next toolbar click opens the side panel (valid user gesture path)
-      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-    } catch (_err) {}
-  });
-}
-watchPendingSidebar();
 
 const DASHBOARD_FALLBACK = "https://user7.setupvpn.com/ui/dashboard";
 const ALARM = "sweden-watch";

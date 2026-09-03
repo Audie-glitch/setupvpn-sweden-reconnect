@@ -122,44 +122,13 @@ setInterval(render, 1000);
 render();
 
 (async function maybeOpenSidebarFromPopup() {
+  // Do NOT auto-open side panel on popup open — user wants settings here.
+  // Just refresh the dashboard link bubble if sidebar was blocked.
   try {
-    const cfg = await chrome.storage.local.get({
-      pendingSidebarOpen: false,
-      autoOpenSidebar: true,
-      sidebarBlocked: false,
-      popupDashboardLink: "",
-      dashboardUrl: "",
-    });
-    // Always refresh link into popup when opening
     chrome.runtime.sendMessage({ type: "resolveDashLink" }, () => {
       void chrome.runtime.lastError;
       render();
     });
-
-    if (!cfg.pendingSidebarOpen && !cfg.sidebarBlocked) return;
-    if (cfg.autoOpenSidebar === false) {
-      await render();
-      return;
-    }
-    if (!chrome.sidePanel || !chrome.sidePanel.open) {
-      await chrome.storage.local.set({ sidebarBlocked: true });
-      await render();
-      return;
-    }
-    try {
-      const win = await chrome.windows.getCurrent();
-      await chrome.sidePanel.open({ windowId: win.id });
-      await chrome.storage.local.set({
-        pendingSidebarOpen: false,
-        sidebarBlocked: false,
-      });
-      try {
-        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
-      } catch (_err) {}
-    } catch (_err) {
-      await chrome.storage.local.set({ sidebarBlocked: true, pendingSidebarOpen: true });
-    }
-    await render();
   } catch (_err) {}
 })();
 
