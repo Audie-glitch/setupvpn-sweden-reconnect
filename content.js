@@ -1,7 +1,8 @@
 (function () {
   const UPGRADE = /upgrade|need to upgrade|get premium|premium required|trial ended|buy premium/i;
-  const CONNECTED_TO = /connected to\s+([A-Za-z][A-Za-z .'-]{1,40})/i;
-  const TIME_REMAINING = /time remaining\s+(\d{1,2}):(\d{2}):(\d{2})/i;
+  const CONNECTED_TO = /connected to\s+([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2})(?![a-z])/;
+  const TIME_REMAINING = /time\s*remaining\s*(\d{1,2}):(\d{2}):(\d{2})/i;
+  const CLOCK = /\b(\d{1,2}):(\d{2}):(\d{2})\b/;
   const DEFAULTS = {
     enabled: true,
     country: "Sweden",
@@ -55,7 +56,16 @@
   function bodyText() {
     try {
       const root = document.body || document.documentElement;
-      return root ? String(root.textContent || "") : "";
+      if (!root) return "";
+      // innerText keeps visual word breaks (textContent glues "Sweden"+"Disconnect")
+      let t = "";
+      try {
+        t = root.innerText || "";
+      } catch (_err) {
+        t = "";
+      }
+      if (!t) t = root.textContent || "";
+      return String(t).replace(/\u00a0/g, " ");
     } catch (_err) {
       return "";
     }
@@ -332,15 +342,19 @@
   function detectConnectedCountry() {
     const m = bodyText().match(CONNECTED_TO);
     if (!m) return null;
-    return m[1].replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+    let name = m[1].replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+    // Strip glued UI words if regex still over-captured
+    name = name.replace(/(Disconnect|Guest|Servers|Time|IP|Lookup|Open).*/i, "").trim();
+    if (!name || name.length > 40) return null;
+    return name;
   }
 
-  function detectTimeRemaining() {
-    const m = bodyText().match(TIME_REMAINING);
+  function parseClock(m) {
     if (!m) return null;
     const hours = Number(m[1]);
     const minutes = Number(m[2]);
     const seconds = Number(m[3]);
+    if (![hours, minutes, seconds].every((n) => Number.isFinite(n))) return null;
     const totalMs = (hours * 3600 + minutes * 60 + seconds) * 1000;
     const text =
       String(hours).padStart(2, "0") +
@@ -349,6 +363,48 @@
       ":" +
       String(seconds).padStart(2, "0");
     return { text, endsAt: Date.now() + totalMs };
+  }
+
+  function detectTimeRemaining() {
+    const fromBody = parseClock(bodyText().match(TIME_REMAINING));
+    if (fromBody) return fromBody;
+
+    // DOM walk: label "Time remaining" near an HH:MM:SS node (antd splits them)
+    const nodes = document.querySelectorAll("div, span, p, li, td, strong, b");
+    for (const el of nodes) {
+      let raw = "";
+      try {
+        raw = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+      } catch (_err) {
+        continue;
+      }
+      if (!raw || raw.length > 64) continue;
+      if (/time\s*remaining/i.test(raw)) {
+        const m = raw.match(TIME_REMAINING) || raw.match(CLOCK);
+        const parsed = parseClock(m);
+        if (parsed) return parsed;
+        // sibling / child clock
+        const parent = el.parentElement;
+        if (parent) {
+          let pt = "";
+          try {
+            pt = (parent.innerText || parent.textContent || "").replace(/\s+/g, " ");
+          } catch (_err) {}
+          const pm = pt.match(TIME_REMAINING) || pt.match(CLOCK);
+          const pp = parseClock(pm);
+          if (pp) return pp;
+        }
+      }
+      if (/^\d{1,2}:\d{2}:\d{2}$/.test(raw)) {
+        // only accept bare clocks near "remaining"
+        const near = (el.parentElement && (el.parentElement.innerText || "")) || "";
+        if (/remaining/i.test(near)) {
+          const parsed = parseClock(raw.match(CLOCK));
+          if (parsed) return parsed;
+        }
+      }
+    }
+    return null;
   }
 
   function isConnected() {
