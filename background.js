@@ -29,13 +29,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     const current = await chrome.storage.local.get(null);
     await chrome.storage.local.set({ ...DEFAULTS, ...current, lastAt: Date.now() });
     chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
+
+    // Unpacked "Reload" fires reason=update. If SetupVPN is missing/disabled,
+    // immediately open the Web Store and drive Add to Chrome → connect.
     if (details.reason === "install") {
       chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
-      await startInstallAndConnectFlow(true);
-    } else if (details.reason === "update") {
-      // Don't force-open store/welcome on every reload during development.
-      await refreshSetupVpnState();
     }
+
+    const state = await refreshSetupVpnState();
+    if (!state.setupvpnInstalled || !state.setupvpnEnabled) {
+      await setStatus("SetupVPN missing — starting install on reload");
+      await startInstallAndConnectFlow(true);
+      return;
+    }
+
+    // Already present: after reload, reconnect.
+    await chrome.storage.local.set({ pendingConnect: true });
+    await openDashboardAndConnect(true);
   } catch (err) {
     console.error("onInstalled failed", err);
   }
