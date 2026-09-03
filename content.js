@@ -518,11 +518,10 @@
   }
 
   function locationsReady() {
-    // Wait until Free-server rows exist (not just the "Select location" chrome).
     const items = document.querySelectorAll(
       "li.ant-list-item.list-item, li.ant-list-item, .ant-list-item"
     );
-    if (items.length < 2) return false;
+    if (!items.length) return false;
     let titled = 0;
     let flagged = 0;
     for (const li of items) {
@@ -530,8 +529,8 @@
       if (title && labelText(title)) titled += 1;
       if (li.querySelector('img[src*="/ui/flags/"], img[src*="flags/"]')) flagged += 1;
     }
-    // Need a few real country rows, not an empty/skeleton list
-    return titled >= 2 || flagged >= 2;
+    // At least one real country row (title or flag)
+    return titled >= 1 || flagged >= 1;
   }
 
   function onSelectLocationScreen() {
@@ -544,11 +543,24 @@
     );
   }
 
-    function targetCountry() {
-    if (settings.rememberLastLocation && settings.lastConnectedCountry) {
-      return settings.lastConnectedCountry;
+    function sanitizeCountryName(name) {
+    if (!name) return "";
+    let n = String(name).replace(/\s+/g, " ").trim();
+    n = n.replace(/(Disconnect|Guest|Servers|Time|IP|Lookup|Open|mode).*/i, "").trim();
+    // Single country-like token(s)
+    const m = n.match(/^[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}$/);
+    if (!m) return "";
+    if (n.length < 2 || n.length > 32) return "";
+    return n;
+  }
+
+  function targetCountry() {
+    const fallback = (settings.country || "Sweden").trim() || "Sweden";
+    if (settings.rememberLastLocation) {
+      const remembered = sanitizeCountryName(settings.lastConnectedCountry);
+      if (remembered) return remembered;
     }
-    return (settings.country || "Sweden").trim();
+    return fallback;
   }
 
   function flagCode(country) {
@@ -615,9 +627,10 @@
 
   function clickCountry(country) {
     const now = Date.now();
-    const reconnecting = !!settings.pendingConnect || !isConnected();
+    const onSelect = onSelectLocationScreen();
+    const reconnecting = onSelect || !!settings.pendingConnect || !isConnected();
     const cooldownMs = reconnecting
-      ? 1500
+      ? 1200
       : Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
     if (!locationsReady()) {
@@ -626,13 +639,28 @@
     }
     const el = findCountry(country);
     if (!el) {
+      // If remembered name is wrong, try fallback country once
+      const fallback = (settings.country || "Sweden").trim();
+      if (fallback && fallback.toLowerCase() !== String(country).toLowerCase()) {
+        safeSend("looking for " + country + " — trying " + fallback);
+        country = fallback;
+        const el2 = findCountry(country);
+        if (!el2) {
+          safeSend("looking for " + country);
+          return false;
+        }
+        return clickCountry(country);
+      }
       safeSend("looking for " + country);
       return false;
     }
     lastClick = now;
     if (countryClickInFlight) return true;
     countryClickInFlight = true;
-    safeSend("clicking " + country + " (trusted)");
+    setTimeout(() => {
+      countryClickInFlight = false;
+    }, 5000);
+    safeSend("select location — bubbling " + country);
 
     try {
       chrome.runtime.sendMessage(
@@ -687,11 +715,13 @@
   }
 
   async function rememberCountry(country) {
-    if (!country || !settings.rememberLastLocation) return;
-    if (settings.lastConnectedCountry === country) return;
-    settings.lastConnectedCountry = country;
+    if (!settings.rememberLastLocation) return;
+    const clean = sanitizeCountryName(country);
+    if (!clean) return;
+    if (settings.lastConnectedCountry === clean) return;
+    settings.lastConnectedCountry = clean;
     try {
-      await chrome.storage.local.set({ lastConnectedCountry: country });
+      await chrome.storage.local.set({ lastConnectedCountry: clean });
     } catch (_err) {}
   }
 
@@ -743,16 +773,6 @@
         return;
       }
 
-      // Full flow order:
-      // 1) /ui/?d=... Next
-      // 2) dashboard Next (intro)
-      // 3) /ui/login → Connect to VPN
-      // 4) agree Terms + 18+
-      // 5) selection page → country
-      if (advanceOnboarding()) return;
-      if (clickConnectToVpn()) return;
-      if (acceptGuestAgreements()) return;
-
       if (settings.stopOnUpgrade && isUpgrade()) {
         watching = false;
         await saveTimeRemaining(null);
@@ -771,7 +791,10 @@
           } catch (_err) {}
         }
         const shown =
-          detected || settings.lastConnectedCountry || settings.country || "VPN";
+          sanitizeCountryName(detected) ||
+          sanitizeCountryName(settings.lastConnectedCountry) ||
+          settings.country ||
+          "VPN";
         const rem = settings.timeRemainingText
           ? " · " + settings.timeRemainingText + " left"
           : "";
@@ -781,17 +804,26 @@
 
       await saveTimeRemaining(null);
 
-      // Only hammer country clicks on selection/dashboard, not login/onboarding
-      if (isLoginPage() || isOnboardingQueryPage() || isGuestPage()) return;
-
-      if (onSelectLocationScreen() || isDashboardPage()) {
+      // Priority: enabled + select location => bubble location (do this first)
+      if (onSelectLocationScreen()) {
         if (!locationsReady()) {
           safeSend("waiting for locations to load");
           return;
         }
+        clickCountry(targetCountry());
+        return;
       }
 
-      clickCountry(targetCountry());
+      // Earlier flow steps only when not on the location list
+      if (advanceOnboarding()) return;
+      if (clickConnectToVpn()) return;
+      if (acceptGuestAgreements()) return;
+
+      if (isLoginPage() || isOnboardingQueryPage() || isGuestPage()) return;
+
+      if (isDashboardPage() && locationsReady()) {
+        clickCountry(targetCountry());
+      }
     } catch (err) {
       if (/context invalidated/i.test(String(err))) {
         kill("tick");
@@ -810,9 +842,10 @@
       isLoginPage() ||
       isGuestPage() ||
       isSelectionPage() ||
+      onSelectLocationScreen() ||
       settings.pendingConnect
     ) {
-      sec = Math.min(sec, 2);
+      sec = 1;
     }
     const ms = sec * 1000;
     timer = setInterval(tick, ms);

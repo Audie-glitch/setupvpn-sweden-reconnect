@@ -44,10 +44,25 @@ const DEFAULTS = {
   lastAt: Date.now(),
 };
 
+function sanitizeStoredCountry(name) {
+  if (!name) return "";
+  let n = String(name).replace(/\s+/g, " ").trim();
+  n = n.replace(/(Disconnect|Guest|Servers|Time|IP|Lookup|Open|mode).*/i, "").trim();
+  if (!/^[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}$/.test(n)) return "";
+  if (n.length < 2 || n.length > 32) return "";
+  return n;
+}
+
 chrome.runtime.onInstalled.addListener(async (details) => {
   try {
     const current = await chrome.storage.local.get(null);
-    await chrome.storage.local.set({ ...DEFAULTS, ...current, lastAt: Date.now() });
+    const cleaned = sanitizeStoredCountry(current.lastConnectedCountry);
+    await chrome.storage.local.set({
+      ...DEFAULTS,
+      ...current,
+      lastConnectedCountry: cleaned || current.country || DEFAULTS.country,
+      lastAt: Date.now(),
+    });
     chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
 
     // Unpacked "Reload" fires reason=update. If SetupVPN is missing/disabled,
