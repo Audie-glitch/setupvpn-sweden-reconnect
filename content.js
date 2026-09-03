@@ -167,24 +167,71 @@
     return !!input.checked;
   }
 
+  function mouseOpts(el, extra) {
+    const r = el.getBoundingClientRect();
+    const x = Math.max(1, Math.floor(r.left + Math.min(r.width, 40) / 2));
+    const y = Math.max(1, Math.floor(r.top + r.height / 2));
+    return Object.assign(
+      {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        button: 0,
+        buttons: 1,
+      },
+      extra || {}
+    );
+  }
+
+  function forceHover(el) {
+    if (!el) return;
+    const opts = mouseOpts(el, { buttons: 0 });
+    try {
+      el.dispatchEvent(new MouseEvent("mouseover", opts));
+      el.dispatchEvent(new MouseEvent("mouseenter", opts));
+      el.dispatchEvent(new PointerEvent("pointerover", opts));
+      el.dispatchEvent(new PointerEvent("pointerenter", opts));
+      el.dispatchEvent(new MouseEvent("mousemove", opts));
+    } catch (_err) {}
+  }
+
   function forceClick(el) {
     if (!el) return false;
     try {
       el.scrollIntoView({ block: "center", inline: "nearest" });
     } catch (_err) {}
-    const opts = { bubbles: true, cancelable: true, view: window };
+    forceHover(el);
+    const down = mouseOpts(el, { buttons: 1 });
+    const up = mouseOpts(el, { buttons: 0 });
     try {
-      el.dispatchEvent(new PointerEvent("pointerdown", opts));
-      el.dispatchEvent(new MouseEvent("mousedown", opts));
-      el.dispatchEvent(new PointerEvent("pointerup", opts));
-      el.dispatchEvent(new MouseEvent("mouseup", opts));
-      el.dispatchEvent(new MouseEvent("click", opts));
+      el.dispatchEvent(new PointerEvent("pointerdown", down));
+      el.dispatchEvent(new MouseEvent("mousedown", down));
+      el.dispatchEvent(new PointerEvent("pointerup", up));
+      el.dispatchEvent(new MouseEvent("mouseup", up));
+      el.dispatchEvent(new MouseEvent("click", up));
     } catch (_err) {
       try {
         el.click();
       } catch (_err2) {}
     }
     return true;
+  }
+
+  function countryRowFrom(el) {
+    if (!el) return null;
+    return (
+      el.closest(".ant-list-item") ||
+      el.closest("li.ant-list-item") ||
+      el.closest("[role='listitem']") ||
+      el.closest("li") ||
+      el.closest("[role='button']") ||
+      el.closest("button, a, tr") ||
+      el
+    );
   }
 
   function allClickables() {
@@ -427,30 +474,31 @@
     if (!country) return null;
     const exact = new RegExp("^" + escapeRegExp(country) + "$", "i");
     const word = new RegExp("(?:^|\\b)" + escapeRegExp(country) + "(?:\\b|$)", "i");
-    const soft = new RegExp(escapeRegExp(country), "i");
+
+    // Prefer Ant Design meta titles: <h4 class="ant-list-item-meta-title">Sweden</h4>
+    const titles = document.querySelectorAll(
+      "h4.ant-list-item-meta-title, .ant-list-item-meta-title, .ant-list-item-meta-content"
+    );
+    for (const title of titles) {
+      const text = labelText(title);
+      if (!text) continue;
+      if (exact.test(text) || word.test(text)) {
+        return countryRowFrom(title);
+      }
+    }
+
     const nodes = document.querySelectorAll(
       "li, button, a, [role='button'], [role='listitem'], .ant-list-item, .ant-list-item-meta, .list-item, .ant-row, tr, div"
     );
     let softHit = null;
     for (const el of nodes) {
-      // Skip huge containers
       let text = labelText(el);
       if (!text || text.length > 80) continue;
       if (/premium|upgrade|buy/i.test(text) && !word.test(text)) continue;
-      if (exact.test(text)) return el;
-      if (word.test(text) && text.length < 64) {
-        // Prefer the clickable row ancestor
-        const row =
-          el.closest(
-            "li, .ant-list-item, [role='listitem'], [role='button'], button, a, tr"
-          ) || el;
-        return row;
-      }
-      if (!softHit && soft.test(text) && text.length < 48 && !/premium/i.test(text)) {
-        softHit =
-          el.closest(
-            "li, .ant-list-item, [role='listitem'], [role='button'], button, a, tr"
-          ) || el;
+      if (exact.test(text)) return countryRowFrom(el);
+      if (word.test(text) && text.length < 64) return countryRowFrom(el);
+      if (!softHit && text.length < 48 && word.test(text) && !/premium/i.test(text)) {
+        softHit = countryRowFrom(el);
       }
     }
     return softHit;
@@ -458,8 +506,6 @@
 
   function clickCountry(country) {
     const now = Date.now();
-    // After Continue/agree, don't wait the full reconnect cooldown — only 1.2s.
-    // Full cooldown applies once already connected and we might re-click.
     const reconnecting = !!settings.pendingConnect || !isConnected();
     const cooldownMs = reconnecting
       ? 1200
@@ -471,13 +517,23 @@
       return false;
     }
     lastClick = now;
+
+    // Hover-activated rows: hover meta + item, then click the row (not just the h4)
+    const meta = el.querySelector(".ant-list-item-meta, .ant-list-item-meta-content") || el;
+    forceHover(meta);
+    forceHover(el);
     forceClick(el);
-    // Also click an inner primary control if the row itself is inert
-    try {
-      const inner =
-        el.querySelector("button, [role='button'], a, .ant-btn") || null;
-      if (inner && inner !== el) forceClick(inner);
-    } catch (_err) {}
+
+    // Retry click on title/content if row click is a no-op in React
+    const title =
+      el.querySelector("h4.ant-list-item-meta-title, .ant-list-item-meta-title") ||
+      el.querySelector(".ant-list-item-meta-content") ||
+      null;
+    if (title) {
+      forceHover(title);
+      forceClick(title);
+    }
+
     safeSend("clicked " + country);
     if (settings.pendingConnect) {
       settings.pendingConnect = false;
