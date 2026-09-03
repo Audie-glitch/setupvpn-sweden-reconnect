@@ -221,7 +221,57 @@
     return true;
   }
 
-  function countryRowFrom(el) {
+  function reactClick(el) {
+    if (!el) return false;
+    let node = el;
+    for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+      const propsKey = Object.keys(node).find((k) => k.startsWith("__reactProps$"));
+      if (!propsKey) continue;
+      const props = node[propsKey];
+      if (!props) continue;
+      const handlers = [props.onClick, props.onMouseDown, props.onPointerDown].filter(Boolean);
+      for (const fn of handlers) {
+        try {
+          fn({
+            preventDefault() {},
+            stopPropagation() {},
+            nativeEvent: { preventDefault() {}, stopPropagation() {} },
+            currentTarget: node,
+            target: el,
+            type: "click",
+            bubbles: true,
+            button: 0,
+            buttons: 1,
+          });
+          return true;
+        } catch (_err) {}
+      }
+    }
+    return false;
+  }
+
+  function pointClick(el) {
+    if (!el) return false;
+    try {
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+    } catch (_err) {}
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const x = Math.floor(r.left + Math.min(Math.max(r.width / 2, 24), r.width - 4));
+    const y = Math.floor(r.top + r.height / 2);
+    const top = document.elementFromPoint(x, y) || el;
+    forceHover(top);
+    forceClick(top);
+    reactClick(top);
+    if (top !== el) {
+      forceHover(el);
+      forceClick(el);
+      reactClick(el);
+    }
+    return true;
+  }
+
+    function countryRowFrom(el) {
     if (!el) return null;
     return (
       el.closest(".ant-list-item") ||
@@ -508,7 +558,7 @@
     const now = Date.now();
     const reconnecting = !!settings.pendingConnect || !isConnected();
     const cooldownMs = reconnecting
-      ? 1200
+      ? 1000
       : Math.max(5, Number(settings.cooldownSeconds) || 20) * 1000;
     if (now - lastClick < cooldownMs) return false;
     const el = findCountry(country);
@@ -518,20 +568,16 @@
     }
     lastClick = now;
 
-    // Hover-activated rows: hover meta + item, then click the row (not just the h4)
-    const meta = el.querySelector(".ant-list-item-meta, .ant-list-item-meta-content") || el;
+    const meta =
+      el.querySelector(".ant-list-item-meta, .ant-list-item-meta-content, h4.ant-list-item-meta-title") ||
+      el;
     forceHover(meta);
     forceHover(el);
-    forceClick(el);
-
-    // Retry click on title/content if row click is a no-op in React
-    const title =
-      el.querySelector("h4.ant-list-item-meta-title, .ant-list-item-meta-title") ||
-      el.querySelector(".ant-list-item-meta-content") ||
-      null;
-    if (title) {
-      forceHover(title);
-      forceClick(title);
+    pointClick(el);
+    reactClick(el);
+    if (meta !== el) {
+      pointClick(meta);
+      reactClick(meta);
     }
 
     safeSend("clicked " + country);
